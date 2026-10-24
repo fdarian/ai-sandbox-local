@@ -1,0 +1,8 @@
+{
+	"extends": "@total-typescript/tsconfig/bundler/no-dom/app",
+	"compilerOptions": {
+		"noErrorTruncation": true,
+		"types": ["node"]
+	},
+	"include": ["blume.config.ts"]
+}
