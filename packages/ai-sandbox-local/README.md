@@ -110,7 +110,7 @@ Set `sandboxConfig: { workDir: '.' }` as above. If the harness's `onFirstCreate`
 
 - No `resumeSession`: spawned processes die with the host process, so there is nothing to reattach to.
 - No `setNetworkPolicy` or `setPorts`: nothing local can enforce them.
-- `stop()` and `destroy()` send `SIGTERM` to every process started through the session or its `restricted()` view, and to everything those processes started (the harness's bridge and the CLI it launched included, and `run` calls in flight) and release its port. They never delete the directory.
+- `stop()` and `destroy()` send `SIGTERM` to every process started through the session or its `restricted()` view, and to all of their current descendants (the harness's bridge and the CLI it launched included, and `run` calls in flight), and release its port. A process whose parent already exited can't be found. They never delete the directory.
 
 </details>
 

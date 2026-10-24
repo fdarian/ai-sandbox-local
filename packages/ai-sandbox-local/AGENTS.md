@@ -16,13 +16,13 @@
 ## Architecture
 
 - `src/local-sandbox-session.ts` — `LocalSandboxSession`, the plain `Experimental_SandboxSession`: file I/O via `node:fs/promises`, `run`/`spawn` via `/bin/bash -c`. This is what `restricted()` returns.
-- `src/local-network-sandbox-session.ts` — `LocalNetworkSandboxSession` adds `id`, `defaultWorkingDirectory`, `ports`, `getPortUrl`/`getPortEndpoint`, `stop`/`destroy`, `restricted`. `stop` kills the process tree of every process in the session's `ProcessRegistry` and releases its port; it never touches the directory, which is the user's real checkout.
+- `src/local-network-sandbox-session.ts` — `LocalNetworkSandboxSession` adds `id`, `defaultWorkingDirectory`, `ports`, `getPortUrl`/`getPortEndpoint`, `stop`/`destroy`, `restricted`. `stop` kills every process in the session's `ProcessRegistry` and all of their current descendants and releases its port; it never touches the directory, which is the user's real checkout.
 - `src/create-local-sandbox-session.ts` — `createLocalSandboxSession`: resolves and `mkdir -p`s `workingDirectory`, leases a port, returns a `LocalNetworkSandboxSession`. The primary entry point, for `agent.createSession({ sandboxSession })`; the agent never calls `onFirstCreate` on that path.
 - `src/local-sandbox-provider.ts` — `LocalSandboxProvider` and `createLocalSandboxProvider`, for the deprecated `HarnessAgent({ sandbox })` path. `createSession` delegates to `createLocalSandboxSession`, then runs `onFirstCreate` on `restricted()` and stops the session if it throws.
 - `src/port.ts` — `allocatePort`/`releasePort`: finds a free loopback port and leases it from an in-process registry so concurrent `createSession()` calls never share one.
 - `src/process-registry.ts` — `ProcessRegistry`, internal. `LocalSandboxSession.startShell` registers every `run`/`spawn` child and drops it on `close`; the network session hands the same registry to each `restricted()` view, so `stop` reaches the harness's bridge (spawned through `restricted()`) and in-flight `run`s.
-- `src/kill-process-tree.ts` — `SIGTERM`s a child and all its descendants. Used by `ProcessRegistry.killAll`, `SandboxProcess.kill()` and the abort path; killing only the direct `/bin/bash -c` child would leave the bridge's CLI server running, reparented to PID 1.
-- `src/sandbox-process.ts` — wraps a `ChildProcess` as `Experimental_SandboxProcess`; shared by `run` and `spawn`. Handles `abortSignal` itself (not via `spawn`'s `signal` option) so aborting kills the whole tree.
+- `src/kill-process-tree.ts` — `SIGTERM`s a child and all its current descendants. Used by `ProcessRegistry.killAll`, `SandboxProcess.kill()` and the abort path; killing only the direct `/bin/bash -c` child would leave the bridge's CLI server running, reparented to PID 1.
+- `src/sandbox-process.ts` — wraps a `ChildProcess` as `Experimental_SandboxProcess`; shared by `run` and `spawn`. Handles `abortSignal` itself (not via `spawn`'s `signal` option) so aborting kills the child's current descendants too.
 - `src/stream-utils.ts` — stream/bytes glue for the stream-shaped `readFile`/`writeFile`.
 
 ## Non-obvious decisions
@@ -39,7 +39,7 @@
 
 ## Gotchas
 
-- Children are deliberately not `detached`: a process group of their own would stop terminal Ctrl+C reaching them. Instead `killProcessTree` snapshots the process table with `ps` and collects descendants *before* signalling anything, since the first kill reparents grandchildren to PID 1 and loses them. If `ps` fails it throws.
+- Children are deliberately not `detached`: a process group of their own would catch orphans reparented to PID 1 (e.g. the OpenCode adapter's `opencode serve` after its bridge exits), but would stop terminal Ctrl+C reaching them. Instead `killProcessTree` snapshots the process table with `ps` and collects descendants *before* signalling anything, since the first kill reparents grandchildren to PID 1 and loses them. A process already reparented before `stop` is unreachable. If `ps` fails it throws.
 
 - `run`'s stdout/stderr must be drained through the same wrapper `spawn` uses (`toSandboxProcess` + `collectStream`). A second `'data'` listener on the raw streams races `Readable.toWeb` and starves whichever loses.
 - A process killed by `kill()` or an aborted signal reports `128 + signum` as `exitCode`, the value the shell reports as `$?`.

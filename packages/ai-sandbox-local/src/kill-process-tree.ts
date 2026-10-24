@@ -1,7 +1,8 @@
 import { type ChildProcess, execFileSync } from 'node:child_process';
 
 /**
- * SIGTERMs `child` and everything it started. Killing only the direct
+ * SIGTERMs `child` and its current descendants; a descendant whose parent
+ * already exited was reparented to PID 1 and can't be found. Killing only the direct
  * `/bin/bash -c` child leaves its descendants (e.g. a bridge and the CLI
  * server it launched) running, reparented to PID 1.
  */

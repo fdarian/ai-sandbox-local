@@ -33,4 +33,6 @@ Claude Code, Codex (`gpt-6-luna`), and pi (`xai/grok-4.3`) were run end to end a
 
 ## Shutdown is partial
 
-`stop()` and `destroy()` send `SIGTERM` to each process and its descendants, then return without waiting for the processes to exit, don't touch processes started after they are called, and never delete the directory. Details are in [Sessions and processes](/sessions-and-processes#stop-and-destroy).
+`stop()` and `destroy()` send `SIGTERM` to each tracked process and its current descendants, then return without waiting for the processes to exit, don't touch processes started after they are called, and never delete the directory. A process whose parent already exited can't be found, so it is not signalled. Details are in [Sessions and processes](/sessions-and-processes#stop-and-destroy).
+
+The OpenCode adapter currently leaves `opencode serve` running after `session.destroy()`, because its bridge exits without stopping it. That is upstream adapter behavior, and the orphan is out of reach of `stop()`, so kill it yourself if that matters.
