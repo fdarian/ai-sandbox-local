@@ -12,6 +12,12 @@ npm i ai-sandbox-local @ai-sdk/harness @ai-sdk/provider-utils
 
 `@ai-sdk/harness` (`^1.0.163`) and `@ai-sdk/provider-utils` (`^5.0.67`) are peer dependencies. POSIX only: commands run through `/bin/bash`.
 
+The quickstart below also needs `@ai-sdk/harness-claude-code` and `zod`:
+
+```sh
+npm i @ai-sdk/harness-claude-code zod
+```
+
 ## Quickstart
 
 ```ts
@@ -92,7 +98,7 @@ Set `sandboxConfig: { workDir: '.' }` as above. If the harness's `onFirstCreate`
 
 - No `resumeSession`: spawned processes die with the host process, so there is nothing to reattach to.
 - No `setNetworkPolicy` or `setPorts`: nothing local can enforce them.
-- `stop()` and `destroy()` kill processes the session spawned and release its port. They never delete the directory.
+- `stop()` and `destroy()` send `SIGTERM` to every process started through the session or its `restricted()` view (the harness's bridge included, and `run` calls in flight) and release its port. They never delete the directory.
 
 </details>
 

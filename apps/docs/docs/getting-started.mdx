@@ -51,7 +51,7 @@ Run it with your TypeScript runner and `ANTHROPIC_API_KEY` set. Here is what eac
 - `createLocalSandboxSession` points a sandbox at `workingDirectory`, creating the directory if it doesn't exist, and leases a free loopback port for the harness bridge.
 - `sandboxConfig: { workDir: '.' }` makes the agent work directly in `workingDirectory`. Leave it out and the agent works in an empty subdirectory instead; see [Working directory and $HOME](/working-directory).
 - `model` is passed through to Claude Code, so it accepts whatever model id the CLI accepts.
-- `session.destroy()` ends the harness session. Because you passed the sandbox in, you also end it yourself with `sandboxSession.destroy()`. Neither deletes your directory.
+- `session.destroy()` ends the harness session. Because you passed the sandbox in, you also end it yourself with `sandboxSession.destroy()`, which kills any process still running in it, including the harness's bridge. Neither deletes your directory.
 
 :::note[The first run is slow]
 The first `createSession` installs the pinned Claude Code CLI under `$HOME/.ai-sdk-harness`, which took about 20 seconds when measured. Later runs find it already installed and take under a second. If you put a UI on top, say why the first start is slow instead of showing a bare spinner.

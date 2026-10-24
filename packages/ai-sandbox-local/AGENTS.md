@@ -16,10 +16,11 @@
 ## Architecture
 
 - `src/local-sandbox-session.ts` — `LocalSandboxSession`, the plain `Experimental_SandboxSession`: file I/O via `node:fs/promises`, `run`/`spawn` via `/bin/bash -c`. This is what `restricted()` returns.
-- `src/local-network-sandbox-session.ts` — `LocalNetworkSandboxSession` adds `id`, `defaultWorkingDirectory`, `ports`, `getPortUrl`/`getPortEndpoint`, `stop`/`destroy`, `restricted`. `stop` kills processes this session spawned and releases its port; it never touches the directory, which is the user's real checkout.
+- `src/local-network-sandbox-session.ts` — `LocalNetworkSandboxSession` adds `id`, `defaultWorkingDirectory`, `ports`, `getPortUrl`/`getPortEndpoint`, `stop`/`destroy`, `restricted`. `stop` kills every process in the session's `ProcessRegistry` and releases its port; it never touches the directory, which is the user's real checkout.
 - `src/create-local-sandbox-session.ts` — `createLocalSandboxSession`: resolves and `mkdir -p`s `workingDirectory`, leases a port, returns a `LocalNetworkSandboxSession`. The primary entry point, for `agent.createSession({ sandboxSession })`; the agent never calls `onFirstCreate` on that path.
 - `src/local-sandbox-provider.ts` — `LocalSandboxProvider` and `createLocalSandboxProvider`, for the deprecated `HarnessAgent({ sandbox })` path. `createSession` delegates to `createLocalSandboxSession`, then runs `onFirstCreate` on `restricted()` and stops the session if it throws.
 - `src/port.ts` — `allocatePort`/`releasePort`: finds a free loopback port and leases it from an in-process registry so concurrent `createSession()` calls never share one.
+- `src/process-registry.ts` — `ProcessRegistry`, internal. `LocalSandboxSession.startShell` registers every `run`/`spawn` child and drops it on `close`; the network session hands the same registry to each `restricted()` view, so `stop` reaches the harness's bridge (spawned through `restricted()`) and in-flight `run`s.
 - `src/sandbox-process.ts` — wraps a `ChildProcess` as `Experimental_SandboxProcess`; shared by `run` and `spawn`.
 - `src/stream-utils.ts` — stream/bytes glue for the stream-shaped `readFile`/`writeFile`.
 

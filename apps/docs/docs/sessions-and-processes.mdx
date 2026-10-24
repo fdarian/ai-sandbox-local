@@ -71,12 +71,9 @@ await tools.run({ command: 'ls' });
 
 On a local session `stop()` and `destroy()` do the same thing, and calling either twice is safe. Both:
 
-- send `SIGTERM` to processes started with `sandboxSession.spawn()`;
+- send `SIGTERM` to every process still running that was started through the session or a `restricted()` view of it, whether with `spawn()` or `run()`. That includes the harness's bridge. A `run` in flight returns with exit code 143;
 - release the leased port.
 
-Neither deletes or empties the directory. It is your real checkout.
+They send the signal and return without waiting for the processes to exit. Neither deletes or empties the directory. It is your real checkout.
 
-What they don't stop:
-
-- **A `run` already in flight.** It finishes. Cancel it with its `abortSignal`.
-- **Processes started through `restricted()`.** That includes the harness's bridge, which the harness starts through the restricted view. Ending the harness with `session.destroy()` is what stops the bridge, so call it before `sandboxSession.destroy()`, as the [quickstart](/getting-started) does.
+Processes started after `stop()` are not tracked or killed. End the harness session first with `session.destroy()`, then the sandbox with `sandboxSession.destroy()`, as the [quickstart](/getting-started) does, so the harness can shut down its bridge cleanly before the signal arrives.

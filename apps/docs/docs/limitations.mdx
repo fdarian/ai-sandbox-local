@@ -29,4 +29,4 @@ Ports are leased from a registry inside your process. Two separate Node processe
 
 ## Shutdown is partial
 
-`stop()` and `destroy()` don't kill processes the harness started, don't interrupt a `run` in flight, and never delete the directory. Details and the order that works are in [Sessions and processes](/sessions-and-processes#stop-and-destroy).
+`stop()` and `destroy()` send `SIGTERM` and return without waiting for the processes to exit, don't touch processes started after they are called, and never delete the directory. Details are in [Sessions and processes](/sessions-and-processes#stop-and-destroy).

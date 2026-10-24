@@ -82,11 +82,10 @@ Create one with `createLocalSandboxSession`. The constructor takes an already-re
 | `id` | A random UUID, new for each session. |
 | `defaultWorkingDirectory` | The resolved `workingDirectory`. |
 | `ports` | Always exactly one port. |
-| `spawn` | As on `LocalSandboxSession`, and the process is tracked so `stop()` can kill it. |
-| `restricted()` | A new `LocalSandboxSession` with the same directory and `env`. Processes it starts are not tracked by `stop()`. |
+| `restricted()` | A new `LocalSandboxSession` with the same directory and `env`. The view shares this session's process tracking, so `stop()` also kills processes it starts. |
 | `getPortEndpoint` | Resolves to `{ url }` where `url` is `<protocol>://127.0.0.1:<port>`. `protocol` defaults to `http`. It accepts any port number and doesn't check that it is leased or in use. |
 | `getPortUrl` | The same URL as a string. Deprecated in the harness. |
-| `stop` | Sends `SIGTERM` to tracked processes and releases the port. Idempotent. Doesn't wait for in-flight `run` calls, and never touches the directory. |
+| `stop` | Sends `SIGTERM` to every running process started through this session or its `restricted()` views, in-flight `run` calls included, and releases the port. Idempotent. Doesn't wait for the processes to exit, and never touches the directory. |
 | `destroy` | Calls `stop`. |
 
 `GetPortUrlOptions`, `GetPortEndpointOptions`, and `SpawnOptions` are the parameter types of the matching `HarnessV1NetworkSandboxSession` and `Experimental_SandboxSession` members: `{ port: number; protocol?: 'http' | 'https' | 'ws' }` for the port methods, and the options below for `spawn`.
