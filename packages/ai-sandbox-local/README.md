@@ -17,21 +17,18 @@ npm i ai-sandbox-local @ai-sdk/harness @ai-sdk/provider-utils
 ```ts
 import { HarnessAgent } from '@ai-sdk/harness/agent';
 import { claudeCode } from '@ai-sdk/harness-claude-code';
-import { createLocalSandbox } from 'ai-sandbox-local';
-
-const sandbox = createLocalSandbox({
-	mode: 'in-place',
-	repoRoot: '/path/to/your/repo',
-});
+import { createLocalSandboxSession } from 'ai-sandbox-local';
 
 const agent = new HarnessAgent({
 	harness: claudeCode,
 	id: 'local-agent',
 	model: 'claude-sonnet-4-5',
-	sandboxConfig: { workDir: sandbox.workDir },
+	sandboxConfig: { workDir: '.' },
 });
 
-const sandboxSession = await sandbox.provider.createSession();
+const sandboxSession = await createLocalSandboxSession({
+	workingDirectory: '/path/to/your/repo',
+});
 const session = await agent.createSession({ sandboxSession });
 
 try {
@@ -46,7 +43,7 @@ try {
 }
 ```
 
-`sandbox.workDir` must be passed to `sandboxConfig.workDir`: the harness resolves the agent's directory as `<sandbox default dir>/<workDir>`, and the two only line up when they come from the same `createLocalSandbox` call.
+`workDir: '.'` makes the agent work directly in `workingDirectory`. Without it, the harness creates a fresh subdirectory inside it.
 
 <details>
 <summary>Environment, PATH and pnpm</summary>
@@ -54,9 +51,8 @@ try {
 Pass `env` to layer variables over `process.env` for every command the sandbox runs. A per-call `env` still wins.
 
 ```ts
-createLocalSandbox({
-	mode: 'in-place',
-	repoRoot,
+createLocalSandboxSession({
+	workingDirectory,
 	env: { PATH: `${process.env.HOME}/.local/bin:${process.env.PATH}` },
 });
 ```
@@ -68,18 +64,26 @@ Commands also run with pnpm's `dangerouslyAllowAllBuilds` enabled, so a harness'
 </details>
 
 <details>
-<summary>Sandbox modes</summary>
+<summary>Where harness state goes</summary>
 
-- `in-place`: the agent works in `repoRoot` directly.
-- `relocated`: the sandbox root is a `scratchRoot` you choose, and the repo is reached through a symlink inside it. Use it for harnesses that install a CLI into the sandbox's default directory, so the install stays out of your repo's own package manager workspace.
+Harness bootstrap state (pinned CLI installs, bridge state, skills) lives in `$HOME/.ai-sdk-harness`, not in your repo. `HOME` is read from the sandbox's environment, so `env: { HOME: '/path/to/state' }` relocates it, for example to persistent storage.
+
+</details>
+
+<details>
+<summary>Deprecated <code>sandbox</code> provider form</summary>
+
+`HarnessAgent({ sandbox })` takes a provider instead of a session:
 
 ```ts
-createLocalSandbox({
-	mode: 'relocated',
-	repoRoot,
-	scratchRoot: '/path/outside/any/workspace',
+import { createLocalSandboxProvider } from 'ai-sandbox-local';
+
+const sandbox = createLocalSandboxProvider({
+	workingDirectory: '/path/to/your/repo',
 });
 ```
+
+Set `sandboxConfig: { workDir: '.' }` as above. If the harness's `onFirstCreate` hook throws, the session is stopped before the error propagates.
 
 </details>
 
