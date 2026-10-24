@@ -2,7 +2,25 @@ import { describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { LocalSandboxSession } from '#src/local-sandbox-session.ts';
-import { cleanupTempDir, makeTempDir } from './fixtures.ts';
+import {
+	cleanupTempDir,
+	makeTempDir,
+	spawnWithGrandchild,
+	waitForProcessGone,
+} from './fixtures.ts';
+
+async function readPidFile(path: string): Promise<number> {
+	const deadline = Date.now() + 3000;
+	while (Date.now() < deadline) {
+		const pid = Number.parseInt(
+			await readFile(path, 'utf-8').catch(() => ''),
+			10,
+		);
+		if (Number.isInteger(pid)) return pid;
+		await new Promise((resolve) => setTimeout(resolve, 20));
+	}
+	throw new Error(`No pid appeared in ${path} within 3s.`);
+}
 
 describe('LocalSandboxSession', () => {
 	test('writeTextFile / readTextFile round-trips through the real filesystem', async () => {
@@ -164,6 +182,58 @@ describe('LocalSandboxSession', () => {
 
 			// Killed by SIGTERM: shell convention is 128 + signal number.
 			expect(exit.exitCode).toBe(143);
+		} finally {
+			await cleanupTempDir(dir);
+		}
+	});
+
+	test("spawn's kill() also kills the process's descendants", async () => {
+		const dir = await makeTempDir();
+		try {
+			const session = new LocalSandboxSession(dir);
+			const { proc, grandchildPid } = await spawnWithGrandchild(session);
+
+			await proc.kill();
+			expect((await proc.wait()).exitCode).toBe(143);
+			await waitForProcessGone(grandchildPid);
+		} finally {
+			await cleanupTempDir(dir);
+		}
+	});
+
+	test("an aborted signal kills the spawned process's descendants and rejects wait()", async () => {
+		const dir = await makeTempDir();
+		try {
+			const session = new LocalSandboxSession(dir);
+			const controller = new AbortController();
+			const { proc, grandchildPid } = await spawnWithGrandchild(
+				session,
+				controller.signal,
+			);
+
+			const waiting = proc.wait();
+			controller.abort();
+			await expect(waiting).rejects.toMatchObject({ name: 'AbortError' });
+			await waitForProcessGone(grandchildPid);
+		} finally {
+			await cleanupTempDir(dir);
+		}
+	});
+
+	test('an aborted signal ends a run() and kills its descendants', async () => {
+		const dir = await makeTempDir();
+		try {
+			const session = new LocalSandboxSession(dir);
+			const controller = new AbortController();
+			const running = session.run({
+				command: '(sleep 1000 & echo $! > pid; wait) & wait',
+				abortSignal: controller.signal,
+			});
+			const grandchildPid = await readPidFile(join(dir, 'pid'));
+
+			controller.abort();
+			await expect(running).rejects.toMatchObject({ name: 'AbortError' });
+			await waitForProcessGone(grandchildPid);
 		} finally {
 			await cleanupTempDir(dir);
 		}

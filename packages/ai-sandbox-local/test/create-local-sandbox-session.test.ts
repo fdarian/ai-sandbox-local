@@ -3,7 +3,13 @@ import { stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createLocalSandboxSession } from '#src/create-local-sandbox-session.ts';
-import { cleanupTempDir, makeTempDir } from './fixtures.ts';
+import type { LocalNetworkSandboxSession } from '#src/local-network-sandbox-session.ts';
+import {
+	cleanupTempDir,
+	makeTempDir,
+	spawnWithGrandchild,
+	waitForProcessGone,
+} from './fixtures.ts';
 
 describe('createLocalSandboxSession', () => {
 	test('roots the session at workingDirectory, creating it when missing', async () => {
@@ -237,4 +243,27 @@ describe('createLocalSandboxSession', () => {
 			await cleanupTempDir(workingDirectory);
 		}
 	});
+
+	for (const [name, getSurface] of [
+		['the session', (session: LocalNetworkSandboxSession) => session],
+		[
+			'a restricted() view',
+			(session: LocalNetworkSandboxSession) => session.restricted(),
+		],
+	] as const) {
+		test(`stop() kills the descendants of a process spawned through ${name}`, async () => {
+			const workingDirectory = await makeTempDir();
+			try {
+				const session = await createLocalSandboxSession({ workingDirectory });
+				const { proc, grandchildPid } = await spawnWithGrandchild(
+					getSurface(session),
+				);
+				await session.stop();
+				expect((await proc.wait()).exitCode).toBe(143);
+				await waitForProcessGone(grandchildPid);
+			} finally {
+				await cleanupTempDir(workingDirectory);
+			}
+		});
+	}
 });

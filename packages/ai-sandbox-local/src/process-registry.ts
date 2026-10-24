@@ -1,4 +1,5 @@
 import type { ChildProcess } from 'node:child_process';
+import { killProcessTrees } from '#src/kill-process-tree.ts';
 
 /**
  * Shared by a `LocalNetworkSandboxSession` and every `restricted()` view
@@ -17,8 +18,6 @@ export class ProcessRegistry {
 	}
 
 	killAll(): void {
-		for (const child of this.children) {
-			child.kill('SIGTERM');
-		}
+		killProcessTrees(this.children);
 	}
 }
