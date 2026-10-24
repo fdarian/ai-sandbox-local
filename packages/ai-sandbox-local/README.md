@@ -102,7 +102,9 @@ Set `sandboxConfig: { workDir: '.' }` as above. If the harness's `onFirstCreate`
 
 </details>
 
-Full documentation: https://github.com/fdarian/ai-sandbox-local
+Full documentation: https://ai-sandbox-local.fdarian.com
+
+Source and issues: https://github.com/fdarian/ai-sandbox-local
 
 ## License
 
