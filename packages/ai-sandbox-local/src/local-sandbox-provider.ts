@@ -35,6 +35,7 @@ export class LocalSandboxProvider implements HarnessV1SandboxProvider {
 	): Promise<LocalNetworkSandboxSession> => {
 		const session = await createLocalSandboxSession({
 			workingDirectory: this.settings.workingDirectory,
+			homeDirectory: this.settings.homeDirectory,
 			env: this.settings.env,
 			abortSignal: options?.abortSignal,
 		});

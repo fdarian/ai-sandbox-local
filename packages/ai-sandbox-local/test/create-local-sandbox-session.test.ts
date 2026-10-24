@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { stat } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createLocalSandboxSession } from '#src/create-local-sandbox-session.ts';
 import { cleanupTempDir, makeTempDir } from './fixtures.ts';
@@ -108,6 +109,87 @@ describe('createLocalSandboxSession', () => {
 		} finally {
 			await cleanupTempDir(workingDirectory);
 		}
+	});
+
+	describe('HOME', () => {
+		const printHome = 'printf "%s" "$HOME"';
+
+		test('defaults to a directory under the OS temp dir that exists', async () => {
+			const workingDirectory = await makeTempDir();
+			try {
+				const session = await createLocalSandboxSession({ workingDirectory });
+				try {
+					const home = (await session.run({ command: printHome })).stdout;
+					expect(home).toBe(join(tmpdir(), 'ai-sandbox-local', 'home'));
+					expect((await stat(home)).isDirectory()).toBe(true);
+				} finally {
+					await session.stop();
+				}
+			} finally {
+				await cleanupTempDir(workingDirectory);
+			}
+		});
+
+		test('homeDirectory overrides the default, is created, and reaches restricted() and spawn', async () => {
+			const workingDirectory = await makeTempDir();
+			const root = await makeTempDir();
+			const homeDirectory = join(root, 'nested', 'home');
+			try {
+				const session = await createLocalSandboxSession({
+					workingDirectory,
+					homeDirectory,
+				});
+				try {
+					expect((await stat(homeDirectory)).isDirectory()).toBe(true);
+					expect((await session.run({ command: printHome })).stdout).toBe(
+						homeDirectory,
+					);
+					expect(
+						(await session.restricted().run({ command: printHome })).stdout,
+					).toBe(homeDirectory);
+					const spawned = await session.spawn({ command: printHome });
+					expect(await new Response(spawned.stdout).text()).toBe(homeDirectory);
+				} finally {
+					await session.stop();
+				}
+			} finally {
+				await cleanupTempDir(workingDirectory);
+				await cleanupTempDir(root);
+			}
+		});
+
+		test('settings env.HOME beats homeDirectory and per-call env.HOME beats both, including in restricted()', async () => {
+			const workingDirectory = await makeTempDir();
+			const root = await makeTempDir();
+			try {
+				const session = await createLocalSandboxSession({
+					workingDirectory,
+					homeDirectory: join(root, 'home'),
+					env: { HOME: '/from/settings' },
+				});
+				try {
+					expect((await session.run({ command: printHome })).stdout).toBe(
+						'/from/settings',
+					);
+					expect(
+						(await session.restricted().run({ command: printHome })).stdout,
+					).toBe('/from/settings');
+					expect(
+						(
+							await session.run({
+								command: printHome,
+								env: { HOME: '/from/call' },
+							})
+						).stdout,
+					).toBe('/from/call');
+				} finally {
+					await session.stop();
+				}
+			} finally {
+				await cleanupTempDir(workingDirectory);
+				await cleanupTempDir(root);
+			}
+		});
 	});
 
 	test('getPortEndpoint resolves to loopback and destroy() kills spawned processes idempotently', async () => {
