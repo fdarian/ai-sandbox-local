@@ -18,6 +18,8 @@ The quickstart below also needs `@ai-sdk/harness-claude-code` and `zod`:
 npm i @ai-sdk/harness-claude-code zod
 ```
 
+> **Known issue:** Recent releases of the harness adapters (`@ai-sdk/harness-claude-code` 1.0.163–1.0.167; the upstream fix says Codex and OpenCode are affected too) were published without their bridge lockfile, so the first `createSession` fails with ENOENT on `dist/bridge/pnpm-lock.yaml`. This is an upstream packaging bug, not this library. It is fixed in [vercel/ai#23852](https://github.com/vercel/ai/pull/23852) (reported in [vercel/ai#23829](https://github.com/vercel/ai/issues/23829)) and will go away once a fixed adapter is released. Until then, copy `dist/bridge/pnpm-lock.yaml` from `@ai-sdk/harness-claude-code@1.0.162` into the installed adapter; the bridge's `package.json` is identical.
+
 ## Quickstart
 
 ```ts
