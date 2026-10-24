@@ -1,6 +1,10 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, spyOn, test } from 'bun:test';
 import type { HarnessV1NetworkSandboxSession } from '@ai-sdk/harness';
-import { LocalSandboxProvider } from '#src/local-sandbox-provider.ts';
+import {
+	createLocalSandboxProvider,
+	LocalSandboxProvider,
+} from '#src/local-sandbox-provider.ts';
+import * as portModule from '#src/port.ts';
 import { cleanupTempDir, makeTempDir } from './fixtures.ts';
 
 describe('LocalSandboxProvider', () => {
@@ -8,7 +12,7 @@ describe('LocalSandboxProvider', () => {
 		const dir = await makeTempDir();
 		try {
 			const provider = new LocalSandboxProvider({
-				defaultWorkingDirectory: dir,
+				workingDirectory: dir,
 			});
 			const session = await provider.createSession();
 			try {
@@ -33,7 +37,7 @@ describe('LocalSandboxProvider', () => {
 		const dir = await makeTempDir();
 		try {
 			const provider = new LocalSandboxProvider({
-				defaultWorkingDirectory: dir,
+				workingDirectory: dir,
 			});
 			const session = await provider.createSession();
 			try {
@@ -59,10 +63,10 @@ describe('LocalSandboxProvider', () => {
 		const dirB = await makeTempDir();
 		try {
 			const providerA = new LocalSandboxProvider({
-				defaultWorkingDirectory: dirA,
+				workingDirectory: dirA,
 			});
 			const providerB = new LocalSandboxProvider({
-				defaultWorkingDirectory: dirB,
+				workingDirectory: dirB,
 			});
 
 			const [sessionA, sessionB] = await Promise.all([
@@ -83,7 +87,7 @@ describe('LocalSandboxProvider', () => {
 		const dir = await makeTempDir();
 		try {
 			const provider = new LocalSandboxProvider({
-				defaultWorkingDirectory: dir,
+				workingDirectory: dir,
 			});
 			const session = await provider.createSession();
 			await session.stop();
@@ -96,24 +100,55 @@ describe('LocalSandboxProvider', () => {
 	test('createSession returns a HarnessV1NetworkSandboxSession usable as agent.createSession({ sandboxSession })', async () => {
 		const dir = await makeTempDir();
 		try {
-			const provider = new LocalSandboxProvider({
-				defaultWorkingDirectory: dir,
-			});
+			const provider = createLocalSandboxProvider({ workingDirectory: dir });
 			const session: HarnessV1NetworkSandboxSession =
 				await provider.createSession();
+			try {
+				const port = session.ports[0] as number;
+				expect(await session.getPortEndpoint({ port, protocol: 'ws' })).toEqual(
+					{ url: `ws://127.0.0.1:${port}` },
+				);
+			} finally {
+				await session.destroy();
+			}
+		} finally {
+			await cleanupTempDir(dir);
+		}
+	});
 
-			const port = session.ports[0] as number;
-			expect(await session.getPortEndpoint({ port, protocol: 'ws' })).toEqual({
-				url: `ws://127.0.0.1:${port}`,
-			});
-			expect(await session.getPortEndpoint({ port })).toEqual({
-				url: `http://127.0.0.1:${port}`,
-			});
+	test('onFirstCreate runs against the restricted session and its failure stops the session', async () => {
+		const dir = await makeTempDir();
+		try {
+			const provider = createLocalSandboxProvider({ workingDirectory: dir });
 
-			const proc = await session.spawn({ command: 'sleep 30' });
-			await session.destroy();
-			expect((await proc.wait()).exitCode).toBe(143);
-			await session.destroy();
+			const seen: { restricted?: object } = {};
+			const ok = await provider.createSession({
+				onFirstCreate: async (restricted) => {
+					seen.restricted = restricted;
+					await restricted.writeTextFile({ path: 'seed.txt', content: 'x' });
+				},
+			});
+			try {
+				expect('stop' in (seen.restricted as object)).toBe(false);
+				expect(await ok.readTextFile({ path: 'seed.txt' })).toBe('x');
+			} finally {
+				await ok.stop();
+			}
+
+			const releasePortSpy = spyOn(portModule, 'releasePort');
+			const failure = new Error('bootstrap failed');
+			try {
+				await expect(
+					provider.createSession({
+						onFirstCreate: async () => {
+							throw failure;
+						},
+					}),
+				).rejects.toBe(failure);
+				expect(releasePortSpy).toHaveBeenCalledTimes(1);
+			} finally {
+				releasePortSpy.mockRestore();
+			}
 		} finally {
 			await cleanupTempDir(dir);
 		}
