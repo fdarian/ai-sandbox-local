@@ -1,8 +1,16 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, spyOn, test } from 'bun:test';
 import { stat } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createLocalSandboxSession } from '#src/create-local-sandbox-session.ts';
-import { cleanupTempDir, makeTempDir } from './fixtures.ts';
+import type { LocalNetworkSandboxSession } from '#src/local-network-sandbox-session.ts';
+import * as portModule from '#src/port.ts';
+import {
+	cleanupTempDir,
+	makeTempDir,
+	spawnWithGrandchild,
+	waitForProcessGone,
+} from './fixtures.ts';
 
 describe('createLocalSandboxSession', () => {
 	test('roots the session at workingDirectory, creating it when missing', async () => {
@@ -110,6 +118,87 @@ describe('createLocalSandboxSession', () => {
 		}
 	});
 
+	describe('HOME', () => {
+		const printHome = 'printf "%s" "$HOME"';
+
+		test('defaults to a directory under the OS temp dir that exists', async () => {
+			const workingDirectory = await makeTempDir();
+			try {
+				const session = await createLocalSandboxSession({ workingDirectory });
+				try {
+					const home = (await session.run({ command: printHome })).stdout;
+					expect(home).toBe(join(tmpdir(), 'ai-sandbox-local', 'home'));
+					expect((await stat(home)).isDirectory()).toBe(true);
+				} finally {
+					await session.stop();
+				}
+			} finally {
+				await cleanupTempDir(workingDirectory);
+			}
+		});
+
+		test('homeDirectory overrides the default, is created, and reaches restricted() and spawn', async () => {
+			const workingDirectory = await makeTempDir();
+			const root = await makeTempDir();
+			const homeDirectory = join(root, 'nested', 'home');
+			try {
+				const session = await createLocalSandboxSession({
+					workingDirectory,
+					homeDirectory,
+				});
+				try {
+					expect((await stat(homeDirectory)).isDirectory()).toBe(true);
+					expect((await session.run({ command: printHome })).stdout).toBe(
+						homeDirectory,
+					);
+					expect(
+						(await session.restricted().run({ command: printHome })).stdout,
+					).toBe(homeDirectory);
+					const spawned = await session.spawn({ command: printHome });
+					expect(await new Response(spawned.stdout).text()).toBe(homeDirectory);
+				} finally {
+					await session.stop();
+				}
+			} finally {
+				await cleanupTempDir(workingDirectory);
+				await cleanupTempDir(root);
+			}
+		});
+
+		test('settings env.HOME beats homeDirectory and per-call env.HOME beats both, including in restricted()', async () => {
+			const workingDirectory = await makeTempDir();
+			const root = await makeTempDir();
+			try {
+				const session = await createLocalSandboxSession({
+					workingDirectory,
+					homeDirectory: join(root, 'home'),
+					env: { HOME: '/from/settings' },
+				});
+				try {
+					expect((await session.run({ command: printHome })).stdout).toBe(
+						'/from/settings',
+					);
+					expect(
+						(await session.restricted().run({ command: printHome })).stdout,
+					).toBe('/from/settings');
+					expect(
+						(
+							await session.run({
+								command: printHome,
+								env: { HOME: '/from/call' },
+							})
+						).stdout,
+					).toBe('/from/call');
+				} finally {
+					await session.stop();
+				}
+			} finally {
+				await cleanupTempDir(workingDirectory);
+				await cleanupTempDir(root);
+			}
+		});
+	});
+
 	test('getPortEndpoint resolves to loopback and destroy() kills spawned processes idempotently', async () => {
 		const workingDirectory = await makeTempDir();
 		try {
@@ -152,6 +241,51 @@ describe('createLocalSandboxSession', () => {
 			await session.stop();
 			expect((await running).exitCode).toBe(143);
 		} finally {
+			await cleanupTempDir(workingDirectory);
+		}
+	});
+
+	for (const [name, getSurface] of [
+		['the session', (session: LocalNetworkSandboxSession) => session],
+		[
+			'a restricted() view',
+			(session: LocalNetworkSandboxSession) => session.restricted(),
+		],
+	] as const) {
+		test(`stop() kills the descendants of a process spawned through ${name}`, async () => {
+			const workingDirectory = await makeTempDir();
+			try {
+				const session = await createLocalSandboxSession({ workingDirectory });
+				const { proc, grandchildPid } = await spawnWithGrandchild(
+					getSurface(session),
+				);
+				await session.stop();
+				expect((await proc.wait()).exitCode).toBe(143);
+				await waitForProcessGone(grandchildPid);
+			} finally {
+				await cleanupTempDir(workingDirectory);
+			}
+		});
+	}
+
+	test('stop() still releases the port, and rejects, when ps fails', async () => {
+		const workingDirectory = await makeTempDir();
+		const originalPath = process.env.PATH;
+		const releasePort = spyOn(portModule, 'releasePort');
+		try {
+			const session = await createLocalSandboxSession({ workingDirectory });
+			const proc = await session.spawn({ command: 'sleep 30' });
+
+			process.env.PATH = workingDirectory;
+			await expect(session.stop()).rejects.toThrow();
+			process.env.PATH = originalPath;
+
+			expect(releasePort).toHaveBeenCalledWith(session.ports[0] as number);
+			await proc.kill();
+			await proc.wait();
+		} finally {
+			process.env.PATH = originalPath;
+			releasePort.mockRestore();
 			await cleanupTempDir(workingDirectory);
 		}
 	});

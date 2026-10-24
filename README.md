@@ -9,7 +9,8 @@ Run AI SDK harness agents against your real filesystem and processes.
 ## Get started
 
 - [Package README](./packages/ai-sandbox-local/README.md): install and quickstart
-- [Documentation](./apps/docs): guides and API reference, a Blume site. Run `pnpm --filter docs dev` to read it locally.
+- [Documentation](https://ai-sandbox-local.fdarian.com): guides and API reference. Run `pnpm --filter docs dev` to read the Blume site locally.
+- [GitHub](https://github.com/fdarian/ai-sandbox-local): source and issues
 
 ## Development
 

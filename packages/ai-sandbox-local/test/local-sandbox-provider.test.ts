@@ -33,6 +33,28 @@ describe('LocalSandboxProvider', () => {
 		}
 	});
 
+	test('homeDirectory setting reaches the session and its restricted() view', async () => {
+		const dir = await makeTempDir();
+		const home = await makeTempDir();
+		try {
+			const provider = new LocalSandboxProvider({
+				workingDirectory: dir,
+				homeDirectory: home,
+			});
+			const session = await provider.createSession();
+			try {
+				const printHome = { command: 'printf "%s" "$HOME"' };
+				expect((await session.run(printHome)).stdout).toBe(home);
+				expect((await session.restricted().run(printHome)).stdout).toBe(home);
+			} finally {
+				await session.stop();
+			}
+		} finally {
+			await cleanupTempDir(dir);
+			await cleanupTempDir(home);
+		}
+	});
+
 	test('restricted() shares the same cwd but exposes no infra members', async () => {
 		const dir = await makeTempDir();
 		try {

@@ -9,4 +9,7 @@ export default defineConfig({
 		repo: 'ai-sandbox-local',
 		dir: 'apps/docs',
 	},
+	deployment: {
+		site: 'https://ai-sandbox-local.fdarian.com',
+	},
 });

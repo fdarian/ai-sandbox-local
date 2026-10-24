@@ -15,6 +15,10 @@ npm i ai-sandbox-local @ai-sdk/harness @ai-sdk/provider-utils @ai-sdk/harness-cl
 
 `@ai-sdk/harness` (`^1.0.163`) and `@ai-sdk/provider-utils` (`^5.0.67`) are peer dependencies, because their types appear in this package's API. `@ai-sdk/harness-claude-code` is the harness adapter, and `zod` is its peer dependency.
 
+:::caution[Temporary known issue]
+Recent releases of the harness adapters (`@ai-sdk/harness-claude-code` 1.0.163–1.0.167; the upstream fix says Codex and OpenCode are affected too) were published without their bridge lockfile, so the first `createSession` fails with ENOENT on `dist/bridge/pnpm-lock.yaml`. This is an upstream packaging bug, not this library. It is fixed in [vercel/ai#23852](https://github.com/vercel/ai/pull/23852) (reported in [vercel/ai#23829](https://github.com/vercel/ai/issues/23829)) and will go away once a fixed adapter is released. Until then, copy `dist/bridge/pnpm-lock.yaml` from `@ai-sdk/harness-claude-code@1.0.162` into the installed adapter; the bridge's `package.json` is identical.
+:::
+
 ## Run an agent
 
 ```ts agent.ts lineNumbers
@@ -54,7 +58,7 @@ Run it with your TypeScript runner and `ANTHROPIC_API_KEY` set. Here is what eac
 - `session.destroy()` ends the harness session. Because you passed the sandbox in, you also end it yourself with `sandboxSession.destroy()`, which kills any process still running in it, including the harness's bridge. Neither deletes your directory.
 
 :::note[The first run is slow]
-The first `createSession` installs the pinned Claude Code CLI under `$HOME/.ai-sdk-harness`, which took about 20 seconds when measured. Later runs find it already installed and take under a second. If you put a UI on top, say why the first start is slow instead of showing a bare spinner.
+The first `createSession` installs the pinned Claude Code CLI under the sandbox's `$HOME/.ai-sdk-harness` (a directory under the OS temp dir by default), which took about 20 seconds when measured. Later runs find it already installed and take under a second. If you put a UI on top, say why the first start is slow instead of showing a bare spinner.
 :::
 
 ## Stream the response
@@ -98,4 +102,4 @@ Now the agent owns the sandbox, so `session.destroy()` also destroys it and ther
 
 ## Other harnesses
 
-The examples use Claude Code, and that is the adapter they were run against. `@ai-sdk/harness-codex`, `@ai-sdk/harness-opencode`, and `@ai-sdk/harness-pi` plug into `HarnessAgent` the same way; install one and pass it as `harness`.
+The examples use Claude Code. `@ai-sdk/harness-codex`, `@ai-sdk/harness-opencode`, and `@ai-sdk/harness-pi` plug into `HarnessAgent` the same way; install one and pass it as `harness`. How far each was tested is in [Limitations](/limitations#adapter-coverage).

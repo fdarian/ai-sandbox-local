@@ -132,7 +132,6 @@ export class LocalSandboxSession implements Experimental_SandboxSession {
 			cwd: options.workingDirectory ?? this.cwd,
 			env: spawnEnv(this.sandboxEnv, options.env),
 			stdio: ['ignore', 'pipe', 'pipe'],
-			signal: options.abortSignal,
 		});
 		this.processes.track(child);
 		return child;

@@ -2,6 +2,20 @@
 	"name": "ai-sandbox-local",
 	"version": "0.0.0",
 	"description": "AI SDK harness sandbox that runs on your real filesystem and processes",
+	"keywords": [
+		"ai-sdk",
+		"harness",
+		"sandbox",
+		"local",
+		"agent",
+		"claude-code",
+		"codex",
+		"opencode"
+	],
+	"homepage": "https://ai-sandbox-local.fdarian.com",
+	"bugs": {
+		"url": "https://github.com/fdarian/ai-sandbox-local/issues"
+	},
 	"type": "module",
 	"sideEffects": false,
 	"engines": {

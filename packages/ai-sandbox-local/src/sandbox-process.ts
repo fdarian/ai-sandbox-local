@@ -2,6 +2,7 @@ import type { ChildProcess } from 'node:child_process';
 import { constants as osConstants } from 'node:os';
 import { Readable } from 'node:stream';
 import type { Experimental_SandboxProcess } from '@ai-sdk/provider-utils';
+import { killProcessTree } from '#src/kill-process-tree.ts';
 
 /**
  * Wraps a real `child_process` handle as the `Experimental_SandboxProcess`
@@ -24,6 +25,21 @@ export function toSandboxProcess(
 		child.on('close', (code, signal) => {
 			resolve({ exitCode: resolveExitCode(code, signal) });
 		});
+
+		/*
+		 * Handled here rather than via `spawn`'s own `signal` option, which only
+		 * kills the direct child and so would leave its descendants running.
+		 */
+		if (abortSignal !== undefined) {
+			const onAbort = () => {
+				killProcessTree(child);
+				reject(new DOMException('The operation was aborted', 'AbortError'));
+			};
+			abortSignal.addEventListener('abort', onAbort, { once: true });
+			child.once('close', () => {
+				abortSignal.removeEventListener('abort', onAbort);
+			});
+		}
 	});
 
 	return {
@@ -38,7 +54,7 @@ export function toSandboxProcess(
 			return result;
 		},
 		async kill() {
-			child.kill('SIGTERM');
+			killProcessTree(child);
 		},
 	};
 }

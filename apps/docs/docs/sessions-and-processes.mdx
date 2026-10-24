@@ -38,8 +38,8 @@ Things that are easy to trip on:
 - **A failing command doesn't reject.** `run` resolves with the command's exit code, so `command: 'exit 3'` gives `exitCode: 3`, and a missing program gives `127` with bash's error in `stderr`. Only failing to start the shell, or an abort, rejects.
 - **Stdin is closed.** A command that reads input gets end-of-file immediately.
 - **A missing `workingDirectory` looks like a missing bash.** The call rejects with `spawn /bin/bash ENOENT`, because that is what Node reports for a bad `cwd`.
-- **A killed process reports `128 + signal`.** `kill()` sends `SIGTERM`, so the exit code is `143`, the same value a shell shows in `$?`.
-- **Aborting kills the process and rejects.** Pass an `abortSignal` and both `run` and `spawn().wait()` reject with an `AbortError`. An already-aborted signal rejects before anything starts.
+- **A killed process reports `128 + signal`.** `kill()` sends `SIGTERM` to the process and its current descendants, so the exit code is `143`, the same value a shell shows in `$?`.
+- **Aborting kills the process tree and rejects.** Pass an `abortSignal` and both `run` and `spawn().wait()` reject with an `AbortError`. An already-aborted signal rejects before anything starts.
 
 File helpers such as `readTextFile` and `writeTextFile` resolve a relative path against the session's working directory. They do not confine paths to it: an absolute path or `..` reaches anywhere your user can. `readTextFile` returns `null` for a missing file, and the write helpers create parent directories.
 
@@ -71,7 +71,7 @@ await tools.run({ command: 'ls' });
 
 On a local session `stop()` and `destroy()` do the same thing, and calling either twice is safe. Both:
 
-- send `SIGTERM` to every process still running that was started through the session or a `restricted()` view of it, whether with `spawn()` or `run()`. That includes the harness's bridge. A `run` in flight returns with exit code 143;
+- send `SIGTERM` to every process still running that was started through the session or a `restricted()` view of it, whether with `spawn()` or `run()`, and to all of their current descendants. That includes the harness's bridge and the CLI server it launched while the bridge is still running. A process whose parent has already exited has been reparented to PID 1 and can't be found. A `run` in flight returns with exit code 143;
 - release the leased port.
 
 They send the signal and return without waiting for the processes to exit. Neither deletes or empties the directory. It is your real checkout.

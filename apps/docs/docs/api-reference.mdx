@@ -27,7 +27,7 @@ function createLocalSandboxSession(
 ): Promise<LocalNetworkSandboxSession>;
 ```
 
-The entry point. Pass the result to `agent.createSession({ sandboxSession })`. It resolves `options.workingDirectory` to an absolute path, creates it with `mkdir -p`, and leases one port. It rejects before doing any of that if `abortSignal` is already aborted.
+The entry point. Pass the result to `agent.createSession({ sandboxSession })`. It resolves `options.workingDirectory` and `options.homeDirectory` to absolute paths, creates both with `mkdir -p`, and leases one port. It rejects before doing any of that if `abortSignal` is already aborted.
 
 On this path the agent never calls the harness's `onFirstCreate` hook. The harness runs its bootstrap itself.
 
@@ -36,6 +36,7 @@ On this path the agent never calls the harness's `onFirstCreate` hook. The harne
 ```ts
 type LocalSandboxSessionOptions = {
 	readonly workingDirectory: string;
+	readonly homeDirectory?: string;
 	readonly env?: Readonly<Record<string, string>>;
 	readonly abortSignal?: AbortSignal;
 };
@@ -44,7 +45,8 @@ type LocalSandboxSessionOptions = {
 | Field | Description |
 | --- | --- |
 | `workingDirectory` | The directory commands run in by default. A relative path resolves against the current process directory. Created if missing. |
-| `env` | Added over `process.env` for every `run` and `spawn`. See [Configuration](/configuration#environment-variables) for precedence. |
+| `homeDirectory` | The `HOME` every `run` and `spawn` sees, and so where the harness keeps its state. Resolved to an absolute path and created with `mkdir -p`. Defaults to `ai-sandbox-local/home` under `os.tmpdir()`, shared by all sessions. Pass `os.homedir()` to use your real home. See [Working directory and $HOME](/working-directory#where-harness-state-goes). |
+| `env` | Added over `process.env` and `homeDirectory` for every `run` and `spawn`, so `env.HOME` wins over `homeDirectory`. See [Configuration](/configuration#environment-variables) for precedence. |
 | `abortSignal` | Checked once, before the session is created. It doesn't affect the session afterwards. |
 
 ## `LocalNetworkSandboxSession`
