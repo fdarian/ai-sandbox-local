@@ -4,7 +4,8 @@
 	"packageManager": "pnpm@12.9.0",
 	"scripts": {
 		"format": "biome check --write",
-		"check": "turbo run check"
+		"check": "turbo run check",
+		"ci:version": "changeset version"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.6.2",
