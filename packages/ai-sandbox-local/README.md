@@ -1,0 +1,109 @@
+# ai-sandbox-local
+
+A sandbox for AI SDK [`HarnessAgent`](https://github.com/vercel/ai/tree/main/packages/harness) that runs on your real filesystem and processes. Point a coding agent (Claude Code, Codex, OpenCode, pi) at a repo on your machine, with no VM, container, or remote sandbox in between.
+
+> **There is no isolation.** The agent reads, writes, and executes as your user, directly on your disk. Use it where you would otherwise run the CLI yourself.
+
+## Install
+
+```sh
+npm i ai-sandbox-local @ai-sdk/harness @ai-sdk/provider-utils
+```
+
+`@ai-sdk/harness` (`^1.0.163`) and `@ai-sdk/provider-utils` (`^5.0.67`) are peer dependencies. POSIX only: commands run through `/bin/bash`.
+
+The quickstart below also needs `@ai-sdk/harness-claude-code` and `zod`:
+
+```sh
+npm i @ai-sdk/harness-claude-code zod
+```
+
+## Quickstart
+
+```ts
+import { HarnessAgent } from '@ai-sdk/harness/agent';
+import { claudeCode } from '@ai-sdk/harness-claude-code';
+import { createLocalSandboxSession } from 'ai-sandbox-local';
+
+const agent = new HarnessAgent({
+	harness: claudeCode,
+	id: 'local-agent',
+	model: 'claude-sonnet-4-5',
+	sandboxConfig: { workDir: '.' },
+});
+
+const sandboxSession = await createLocalSandboxSession({
+	workingDirectory: '/path/to/your/repo',
+});
+const session = await agent.createSession({ sandboxSession });
+
+try {
+	const result = await agent.generate({
+		session,
+		prompt: 'Fix the failing test in src/auth.ts',
+	});
+	console.log(result.text);
+} finally {
+	await session.destroy();
+	await sandboxSession.destroy();
+}
+```
+
+`workDir: '.'` makes the agent work directly in `workingDirectory`. Without it, the harness creates a fresh subdirectory inside it.
+
+<details>
+<summary>Environment, PATH and pnpm</summary>
+
+Pass `env` to layer variables over `process.env` for every command the sandbox runs. A per-call `env` still wins.
+
+```ts
+createLocalSandboxSession({
+	workingDirectory,
+	env: { PATH: `${process.env.HOME}/.local/bin:${process.env.PATH}` },
+});
+```
+
+Apps launched from a GUI (a macOS `.app`, for example) often inherit a bare `PATH` that misses where `node` or `pnpm` live. Set `env.PATH` yourself in that case.
+
+Commands also run with pnpm's `dangerouslyAllowAllBuilds` enabled, so a harness's first-run CLI install is not blocked waiting for `pnpm approve-builds` with no terminal to answer. Override it through `env` if you don't want that.
+
+</details>
+
+<details>
+<summary>Where harness state goes</summary>
+
+Harness bootstrap state (pinned CLI installs, bridge state, skills) lives in `$HOME/.ai-sdk-harness`, not in your repo. `HOME` is read from the sandbox's environment, so `env: { HOME: '/path/to/state' }` relocates it, for example to persistent storage.
+
+</details>
+
+<details>
+<summary>Deprecated <code>sandbox</code> provider form</summary>
+
+`HarnessAgent({ sandbox })` takes a provider instead of a session:
+
+```ts
+import { createLocalSandboxProvider } from 'ai-sandbox-local';
+
+const sandbox = createLocalSandboxProvider({
+	workingDirectory: '/path/to/your/repo',
+});
+```
+
+Set `sandboxConfig: { workDir: '.' }` as above. If the harness's `onFirstCreate` hook throws, the session is stopped before the error propagates.
+
+</details>
+
+<details>
+<summary>Limitations</summary>
+
+- No `resumeSession`: spawned processes die with the host process, so there is nothing to reattach to.
+- No `setNetworkPolicy` or `setPorts`: nothing local can enforce them.
+- `stop()` and `destroy()` send `SIGTERM` to every process started through the session or its `restricted()` view (the harness's bridge included, and `run` calls in flight) and release its port. They never delete the directory.
+
+</details>
+
+Full documentation: https://github.com/fdarian/ai-sandbox-local
+
+## License
+
+MIT

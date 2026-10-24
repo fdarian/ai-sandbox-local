@@ -1,0 +1,10 @@
+packages:
+  - "packages/*"
+  - "apps/*"
+enableGlobalVirtualStore: true
+minimumReleaseAgeExclude:
+  - "@ai-sdk/gateway@4.0.125"
+  - "@ai-sdk/harness@1.0.163"
+  - ai@7.0.152
+  - tsdown@0.23.2
+  - blume@2.2.5

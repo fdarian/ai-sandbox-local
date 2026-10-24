@@ -1,0 +1,79 @@
+---
+title: Sessions and processes
+description: Running commands, the leased port, and how a session shuts down.
+sidebar:
+  order: 5
+---
+
+The harness drives the sandbox for you, so most code never touches this page. It is for when you use the session directly: running a command next to the agent, handing a tool a safe view of the sandbox, or working out what survives shutdown.
+
+A `LocalNetworkSandboxSession` is a directory plus one leased loopback port. It is also a full AI SDK sandbox session, so it has `run`, `spawn`, and file I/O.
+
+## Run and spawn
+
+Both run `command` with `/bin/bash -c` in the session's working directory, or in `workingDirectory` when you pass one. They take the same options:
+
+```ts
+const result = await sandboxSession.run({
+	command: 'git status --short',
+	workingDirectory: '/path/to/your/repo/packages/app',
+	env: { NO_COLOR: '1' },
+	abortSignal: AbortSignal.timeout(10_000),
+});
+
+console.log(result.exitCode, result.stdout, result.stderr);
+```
+
+`run` waits for the command and returns its output as strings. `spawn` returns right away with a handle: `stdout` and `stderr` are web `ReadableStream`s, `wait()` resolves with the exit code, and `kill()` ends the process.
+
+```ts
+const proc = await sandboxSession.spawn({ command: 'sleep 60' });
+
+await proc.kill();
+const exit = await proc.wait(); // { exitCode: 143 }
+```
+
+Things that are easy to trip on:
+
+- **A failing command doesn't reject.** `run` resolves with the command's exit code, so `command: 'exit 3'` gives `exitCode: 3`, and a missing program gives `127` with bash's error in `stderr`. Only failing to start the shell, or an abort, rejects.
+- **Stdin is closed.** A command that reads input gets end-of-file immediately.
+- **A missing `workingDirectory` looks like a missing bash.** The call rejects with `spawn /bin/bash ENOENT`, because that is what Node reports for a bad `cwd`.
+- **A killed process reports `128 + signal`.** `kill()` sends `SIGTERM`, so the exit code is `143`, the same value a shell shows in `$?`.
+- **Aborting kills the process and rejects.** Pass an `abortSignal` and both `run` and `spawn().wait()` reject with an `AbortError`. An already-aborted signal rejects before anything starts.
+
+File helpers such as `readTextFile` and `writeTextFile` resolve a relative path against the session's working directory. They do not confine paths to it: an absolute path or `..` reaches anywhere your user can. `readTextFile` returns `null` for a missing file, and the write helpers create parent directories.
+
+## Ports
+
+Each session leases one free loopback port when it is created, and `ports` lists it. Harnesses with a bridge bind their server to it. Sessions created in the same process never share a port. The lease is not coordinated between processes, so two Node processes can be handed the same number.
+
+The package only reserves the number. It doesn't bind anything, and `getPortEndpoint` doesn't check that anything is listening:
+
+```ts
+console.log(sandboxSession.ports); // [60479]
+
+await sandboxSession.getPortEndpoint({ port: 60479, protocol: 'ws' });
+// { url: 'ws://127.0.0.1:60479' }
+```
+
+`protocol` defaults to `http`. The deprecated `getPortUrl` returns the same URL as a string.
+
+## Restricted view
+
+`restricted()` returns a reduced view of the session: `run`, `spawn`, and file I/O in the same directory with the same `env`, and none of `stop`, `destroy`, or the port methods. Hand this to code that should be able to run commands but not end the session. The harness passes this view, never the full session, to the code it hands the sandbox to.
+
+```ts
+const tools = sandboxSession.restricted();
+await tools.run({ command: 'ls' });
+```
+
+## Stop and destroy
+
+On a local session `stop()` and `destroy()` do the same thing, and calling either twice is safe. Both:
+
+- send `SIGTERM` to every process still running that was started through the session or a `restricted()` view of it, whether with `spawn()` or `run()`. That includes the harness's bridge. A `run` in flight returns with exit code 143;
+- release the leased port.
+
+They send the signal and return without waiting for the processes to exit. Neither deletes or empties the directory. It is your real checkout.
+
+Processes started after `stop()` are not tracked or killed. End the harness session first with `session.destroy()`, then the sandbox with `sandboxSession.destroy()`, as the [quickstart](/getting-started) does, so the harness can shut down its bridge cleanly before the signal arrives.

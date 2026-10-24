@@ -1,0 +1,55 @@
+---
+title: Working directory and $HOME
+description: Where the agent works, where the harness keeps its own files, and how to move them.
+sidebar:
+  order: 3
+---
+
+Two directories matter, and they are set in two different places. `workingDirectory` and `sandboxConfig.workDir` decide where the agent works. `$HOME` decides where the harness keeps its own files.
+
+## Where the agent works
+
+`createLocalSandboxSession({ workingDirectory })` resolves the path and creates it with `mkdir -p` if it is missing. That directory becomes the sandbox's `defaultWorkingDirectory`.
+
+What the agent sees is set on the `HarnessAgent`, with `sandboxConfig.workDir`, which is relative to `defaultWorkingDirectory`:
+
+| `workDir` | The agent works in |
+| --- | --- |
+| `'.'` | `workingDirectory` itself. This is what you want for a repo. |
+| omitted | `<workingDirectory>/claude-code-<sessionId>`, a fresh empty subdirectory. Your repo is its parent, not its working directory. |
+| `'packages/app'` | `<workingDirectory>/packages/app`, created if missing. |
+
+The omitted case is the default, and the trap: the agent starts without error and finds an empty directory. Always pass `workDir: '.'` when the agent should see your files.
+
+`workDir` must be relative and stay inside `workingDirectory`: `HarnessAgent` throws on an absolute path or one that starts with `..`.
+## Where harness state goes
+
+The harness keeps its own files outside the directory the agent works in, under `$HOME/.ai-sdk-harness` of the sandbox:
+
+<FileTree>
+
+- ~/
+  - .ai-sdk-harness/
+    - .harness-bootstrap/
+      - claude-code/
+    - .agent-runs/
+- your-repo/
+
+</FileTree>
+
+`.harness-bootstrap/claude-code` holds the pinned CLI install and its bridge, and `.agent-runs` holds per-session bridge state. Your repo stays clean, and the CLI install, which runs `pnpm install`, never runs inside your own pnpm workspace.
+
+The harness finds `$HOME` by running `printf "$HOME"` inside the sandbox. In a local sandbox that is your real home directory unless you override it.
+
+## Move it with `env.HOME`
+
+Set `HOME` in the sandbox's `env` to put the harness state somewhere else, such as persistent storage you control:
+
+```ts
+const sandboxSession = await createLocalSandboxSession({
+	workingDirectory: '/path/to/your/repo',
+	env: { HOME: '/path/to/state' },
+});
+```
+
+The new `$HOME` takes everything that lives under a home directory with it. Claude Code writes its own `~/.claude` and `~/.claude.json` there too, so a relocated session doesn't see your user-level Claude settings. Credentials passed through environment variables, such as `ANTHROPIC_API_KEY`, keep working. See [Configuration](/configuration) for how `env` combines with the host environment.

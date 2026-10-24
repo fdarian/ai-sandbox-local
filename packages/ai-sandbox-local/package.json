@@ -1,0 +1,54 @@
+{
+	"name": "ai-sandbox-local",
+	"version": "0.0.0",
+	"description": "AI SDK harness sandbox that runs on your real filesystem and processes",
+	"type": "module",
+	"sideEffects": false,
+	"engines": {
+		"node": ">=22"
+	},
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		},
+		"./package.json": "./package.json"
+	},
+	"imports": {
+		"#src/*": "./src/*"
+	},
+	"files": [
+		"dist",
+		"README.md",
+		"LICENSE"
+	],
+	"publishConfig": {
+		"access": "public"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/fdarian/ai-sandbox-local.git",
+		"directory": "packages/ai-sandbox-local"
+	},
+	"license": "MIT",
+	"scripts": {
+		"build": "tsdown",
+		"check:type": "tsc --noEmit",
+		"check:lint": "biome lint .",
+		"test": "bun test",
+		"ci:release": "pnpm run build && changeset publish"
+	},
+	"peerDependencies": {
+		"@ai-sdk/harness": "^1.0.163",
+		"@ai-sdk/provider-utils": "^5.0.67"
+	},
+	"devDependencies": {
+		"@ai-sdk/harness": "1.0.163",
+		"@ai-sdk/provider-utils": "5.0.67",
+		"@total-typescript/tsconfig": "1.0.4",
+		"@types/bun": "1.4.4",
+		"@types/node": "22.20.5",
+		"tsdown": "0.23.2",
+		"typescript": "5.9.3"
+	}
+}
