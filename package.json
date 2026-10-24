@@ -1,0 +1,14 @@
+{
+	"name": "ai-sandbox-local-monorepo",
+	"private": true,
+	"packageManager": "pnpm@12.9.0",
+	"scripts": {
+		"format": "biome check --write",
+		"check": "turbo run check"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "2.6.2",
+		"@changesets/cli": "3.0.3",
+		"turbo": "2.11.10"
+	}
+}
