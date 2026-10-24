@@ -7,6 +7,7 @@ import {
 	extractLines,
 } from '@ai-sdk/provider-utils';
 import { isEnoent } from '#src/is-enoent.ts';
+import { ProcessRegistry } from '#src/process-registry.ts';
 import { toSandboxProcess } from '#src/sandbox-process.ts';
 import { bytesToStream, collectStream } from '#src/stream-utils.ts';
 
@@ -69,11 +70,14 @@ const spawnEnv = (
  * `node:fs/promises`. This is the tool-safe surface returned by
  * `LocalNetworkSandboxSession.restricted()`; it holds no infra members
  * (no `stop`/`destroy`/`getPortUrl`), just exec + file I/O against `cwd`.
+ * Every `run`/`spawn` child is tracked in `processes`, which a restricted
+ * view shares with its network session so the session can kill them.
  */
 export class LocalSandboxSession implements Experimental_SandboxSession {
 	constructor(
 		protected readonly cwd: string,
 		protected readonly sandboxEnv?: Readonly<Record<string, string>>,
+		protected readonly processes: ProcessRegistry = new ProcessRegistry(),
 	) {}
 
 	get description(): string {
@@ -124,12 +128,14 @@ export class LocalSandboxSession implements Experimental_SandboxSession {
 	}
 
 	private startShell(options: RunOptions | SpawnOptions): ChildProcess {
-		return spawn('/bin/bash', ['-c', options.command], {
+		const child = spawn('/bin/bash', ['-c', options.command], {
 			cwd: options.workingDirectory ?? this.cwd,
 			env: spawnEnv(this.sandboxEnv, options.env),
 			stdio: ['ignore', 'pipe', 'pipe'],
 			signal: options.abortSignal,
 		});
+		this.processes.track(child);
+		return child;
 	}
 
 	async readFile(

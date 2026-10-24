@@ -1,13 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import type { HarnessV1NetworkSandboxSession } from '@ai-sdk/harness';
-import type {
-	Experimental_SandboxProcess,
-	Experimental_SandboxSession,
-} from '@ai-sdk/provider-utils';
+import type { Experimental_SandboxSession } from '@ai-sdk/provider-utils';
 import { LocalSandboxSession } from '#src/local-sandbox-session.ts';
 import { releasePort } from '#src/port.ts';
+import { ProcessRegistry } from '#src/process-registry.ts';
 
-type SpawnOptions = Parameters<Experimental_SandboxSession['spawn']>[0];
 type GetPortUrlOptions = Parameters<
 	HarnessV1NetworkSandboxSession['getPortUrl']
 >[0];
@@ -18,8 +15,9 @@ type GetPortEndpointOptions = Parameters<
 /**
  * `HarnessV1NetworkSandboxSession` over a real directory on disk. There is no
  * separate "sandbox resource" distinct from that directory plus one leased
- * loopback port — `stop`/`destroy` release the port and kill processes this
- * session spawned; they never touch the directory itself, since it's the
+ * loopback port — `stop`/`destroy` release the port and kill every process
+ * started through this session or its `restricted()` views (in-flight `run`
+ * calls included); they never touch the directory itself, since it's the
  * user's actual git worktree, not disposable sandbox state.
  *
  * `getPortUrl`/`getPortEndpoint` resolve to a bare loopback URL. There is no
@@ -36,7 +34,6 @@ export class LocalNetworkSandboxSession
 	readonly ports: ReadonlyArray<number>;
 
 	private readonly leasedPort: number;
-	private readonly ownedProcesses = new Set<Experimental_SandboxProcess>();
 	private stopped = false;
 
 	constructor(options: {
@@ -44,31 +41,25 @@ export class LocalNetworkSandboxSession
 		port: number;
 		env?: Readonly<Record<string, string>>;
 	}) {
-		super(options.defaultWorkingDirectory, options.env);
+		super(options.defaultWorkingDirectory, options.env, new ProcessRegistry());
 		this.id = randomUUID();
 		this.defaultWorkingDirectory = options.defaultWorkingDirectory;
 		this.leasedPort = options.port;
 		this.ports = [options.port];
 	}
 
-	override async spawn(
-		options: SpawnOptions,
-	): Promise<Experimental_SandboxProcess> {
-		const proc = await super.spawn(options);
-		this.ownedProcesses.add(proc);
-		return proc;
-	}
-
 	/**
 	 * Reduced view sharing this session's `cwd` but none of the infra surface
 	 * — a fresh `LocalSandboxSession`, not `this`, so holders can't reach
 	 * `stop`/`destroy`/`getPortUrl` through it. Matches
-	 * `JustBashSandboxSession.restricted()`'s shape.
+	 * `JustBashSandboxSession.restricted()`'s shape. It shares this session's
+	 * process registry, so `stop()` kills what the view spawned or is running.
 	 */
 	restricted(): Experimental_SandboxSession {
 		return new LocalSandboxSession(
 			this.defaultWorkingDirectory,
 			this.sandboxEnv,
+			this.processes,
 		);
 	}
 
@@ -86,7 +77,7 @@ export class LocalNetworkSandboxSession
 	stop = async (): Promise<void> => {
 		if (this.stopped) return;
 		this.stopped = true;
-		await Promise.all([...this.ownedProcesses].map((proc) => proc.kill()));
+		this.processes.killAll();
 		releasePort(this.leasedPort);
 	};
 

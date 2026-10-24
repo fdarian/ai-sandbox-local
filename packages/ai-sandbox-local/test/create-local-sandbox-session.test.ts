@@ -131,4 +131,28 @@ describe('createLocalSandboxSession', () => {
 			await cleanupTempDir(workingDirectory);
 		}
 	});
+
+	test('stop() kills a process spawned through restricted()', async () => {
+		const workingDirectory = await makeTempDir();
+		try {
+			const session = await createLocalSandboxSession({ workingDirectory });
+			const proc = await session.restricted().spawn({ command: 'sleep 30' });
+			await session.stop();
+			expect((await proc.wait()).exitCode).toBe(143);
+		} finally {
+			await cleanupTempDir(workingDirectory);
+		}
+	});
+
+	test('stop() terminates an in-flight run()', async () => {
+		const workingDirectory = await makeTempDir();
+		try {
+			const session = await createLocalSandboxSession({ workingDirectory });
+			const running = session.restricted().run({ command: 'sleep 30' });
+			await session.stop();
+			expect((await running).exitCode).toBe(143);
+		} finally {
+			await cleanupTempDir(workingDirectory);
+		}
+	});
 });
