@@ -1,0 +1,101 @@
+---
+title: Getting started
+description: Install ai-sandbox-local and run a Claude Code agent on a repo on your machine.
+sidebar:
+  order: 2
+---
+
+You need Node.js 22 or newer on macOS or Linux (commands run through `/bin/bash`), and an Anthropic API key in the environment of the process that runs your code.
+
+## Install
+
+```package-install
+npm i ai-sandbox-local @ai-sdk/harness @ai-sdk/provider-utils @ai-sdk/harness-claude-code zod
+```
+
+`@ai-sdk/harness` (`^1.0.163`) and `@ai-sdk/provider-utils` (`^5.0.67`) are peer dependencies, because their types appear in this package's API. `@ai-sdk/harness-claude-code` is the harness adapter, and `zod` is its peer dependency.
+
+## Run an agent
+
+```ts agent.ts lineNumbers
+import { HarnessAgent } from '@ai-sdk/harness/agent';
+import { claudeCode } from '@ai-sdk/harness-claude-code';
+import { createLocalSandboxSession } from 'ai-sandbox-local';
+
+const agent = new HarnessAgent({
+	harness: claudeCode,
+	id: 'local-agent',
+	model: 'claude-sonnet-4-5',
+	sandboxConfig: { workDir: '.' },
+});
+
+const sandboxSession = await createLocalSandboxSession({
+	workingDirectory: '/path/to/your/repo',
+});
+const session = await agent.createSession({ sandboxSession });
+
+try {
+	const result = await agent.generate({
+		session,
+		prompt: 'Fix the failing test in src/auth.ts',
+	});
+	console.log(result.text);
+} finally {
+	await session.destroy();
+	await sandboxSession.destroy();
+}
+```
+
+Run it with your TypeScript runner and `ANTHROPIC_API_KEY` set. Here is what each part does:
+
+- `createLocalSandboxSession` points a sandbox at `workingDirectory`, creating the directory if it doesn't exist, and leases a free loopback port for the harness bridge.
+- `sandboxConfig: { workDir: '.' }` makes the agent work directly in `workingDirectory`. Leave it out and the agent works in an empty subdirectory instead; see [Working directory and $HOME](/working-directory).
+- `model` is passed through to Claude Code, so it accepts whatever model id the CLI accepts.
+- `session.destroy()` ends the harness session. Because you passed the sandbox in, you also end it yourself with `sandboxSession.destroy()`. Neither deletes your directory.
+
+:::note[The first run is slow]
+The first `createSession` installs the pinned Claude Code CLI under `$HOME/.ai-sdk-harness`, which took about 20 seconds when measured. Later runs find it already installed and take under a second. If you put a UI on top, say why the first start is slow instead of showing a bare spinner.
+:::
+
+## Stream the response
+
+`agent.stream` takes the same arguments as `generate`:
+
+```ts
+const streamResult = await agent.stream({
+	session,
+	prompt: 'Now write a regression test',
+});
+
+for await (const part of streamResult.stream) {
+	if (part.type === 'text-delta') {
+		process.stdout.write(part.text);
+	}
+}
+```
+
+## Use the deprecated provider form
+
+`HarnessAgent` also accepts a `sandbox` provider instead of a session. The harness has deprecated that option, but it is the only way to let the agent create and own the sandbox:
+
+```ts
+import { createLocalSandboxProvider } from 'ai-sandbox-local';
+
+const agent = new HarnessAgent({
+	harness: claudeCode,
+	id: 'local-agent',
+	model: 'claude-sonnet-4-5',
+	sandbox: createLocalSandboxProvider({
+		workingDirectory: '/path/to/your/repo',
+	}),
+	sandboxConfig: { workDir: '.' },
+});
+
+const session = await agent.createSession();
+```
+
+Now the agent owns the sandbox, so `session.destroy()` also destroys it and there is no `sandboxSession` to clean up. The provider takes the same `workingDirectory` and `env` as `createLocalSandboxSession`, but not `abortSignal`.
+
+## Other harnesses
+
+The examples use Claude Code, and that is the adapter they were run against. `@ai-sdk/harness-codex`, `@ai-sdk/harness-opencode`, and `@ai-sdk/harness-pi` plug into `HarnessAgent` the same way; install one and pass it as `harness`.

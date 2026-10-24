@@ -1,0 +1,34 @@
+---
+title: Introduction
+description: A sandbox for the AI SDK's HarnessAgent that runs on your real filesystem and processes.
+---
+
+`ai-sandbox-local` lets an AI SDK [`HarnessAgent`](https://github.com/vercel/ai/tree/main/packages/harness) drive a coding CLI (Claude Code, Codex, OpenCode, pi) against a repo that is already on your machine. There is no VM, container, or remote sandbox in between.
+
+You have a repo on disk and want to start an agent on it from your own code: a script, a desktop app, a CI job. `HarnessAgent` needs a sandbox to run the CLI in, and neither of the two it ships fits:
+
+- `@ai-sdk/sandbox-vercel` runs in a remote Vercel Sandbox. Your checkout isn't there.
+- `@ai-sdk/sandbox-just-bash` is a JavaScript bash over an in-memory filesystem. It exposes no ports, and the bridge that the CLI-backed harnesses use to talk to the host needs one.
+
+This package is the third option: a directory on your disk, `/bin/bash`, and a leased loopback port.
+
+:::danger[There is no isolation]
+The agent reads, writes, and executes as your user, directly on your disk, with your environment variables. Use it where you would otherwise run the CLI yourself, on repos and prompts you trust. For anything untrusted, use a remote sandbox.
+:::
+
+## Where to go next
+
+<CardGroup cols={2}>
+  <Card title="Getting started" href="/getting-started" icon="rocket">
+    Install it and run an agent on a repo.
+  </Card>
+  <Card title="Working directory and $HOME" href="/working-directory" icon="folder">
+    Where the agent works and where harness state lands.
+  </Card>
+  <Card title="Configuration" href="/configuration" icon="file">
+    Environment variables, `PATH` for GUI apps, pnpm build approval.
+  </Card>
+  <Card title="Sessions and processes" href="/sessions-and-processes" icon="terminal">
+    `run`, `spawn`, ports, and shutdown.
+  </Card>
+</CardGroup>

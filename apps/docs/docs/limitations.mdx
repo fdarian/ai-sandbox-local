@@ -1,0 +1,32 @@
+---
+title: Limitations
+description: What this sandbox doesn't do, and what breaks if you expect it to.
+sidebar:
+  order: 7
+---
+
+## No isolation
+
+Nothing sits between the agent and your machine. It runs as your user, can read and write any file you can, and inherits your environment variables, including `ANTHROPIC_API_KEY`. The harness logs a warning that credential brokering is unavailable and forwards the key into the process environment, because there is no boundary to broker across.
+
+A prompt injection in a file the agent reads has the same reach you do. Use this where you would run the CLI yourself, and use a remote sandbox for untrusted input.
+
+## No resume
+
+A harness session can't be resumed across processes. The bridge the harness starts is a child of your process and exits with it, so there is nothing to reattach to. The provider omits `resumeSession`, and resuming through `HarnessAgent({ sandbox })` throws `HarnessCapabilityUnsupportedError`.
+
+## No network policy or port control
+
+Nothing local can enforce outbound network rules, and every port is already leased per session, so the sandbox has no `setNetworkPolicy` or `setPorts`. Code that calls them optionally, as the harness does, gets no effect.
+
+## POSIX only
+
+Commands run through `/bin/bash`, so macOS and Linux are supported and Windows is not.
+
+## One process, one port registry
+
+Ports are leased from a registry inside your process. Two separate Node processes can be handed the same port, and a program outside the registry can take a port between the lease and the moment the bridge binds it.
+
+## Shutdown is partial
+
+`stop()` and `destroy()` don't kill processes the harness started, don't interrupt a `run` in flight, and never delete the directory. Details and the order that works are in [Sessions and processes](/sessions-and-processes#stop-and-destroy).

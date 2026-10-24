@@ -1,0 +1,171 @@
+---
+title: API reference
+description: Every export of ai-sandbox-local, with its signature and the behavior the types don't show.
+sidebar:
+  order: 6
+---
+
+```ts
+import {
+	createLocalSandboxSession,
+	createLocalSandboxProvider,
+	LocalNetworkSandboxSession,
+	LocalSandboxProvider,
+	LocalSandboxSession,
+	type LocalSandboxSessionOptions,
+	type LocalSandboxProviderSettings,
+} from 'ai-sandbox-local';
+```
+
+`Experimental_SandboxSession`, `Experimental_SandboxProcess`, `HarnessV1NetworkSandboxSession`, and `HarnessV1SandboxProvider` come from `@ai-sdk/provider-utils` and `@ai-sdk/harness`; their fields are defined there.
+
+## `createLocalSandboxSession`
+
+```ts
+function createLocalSandboxSession(
+	options: LocalSandboxSessionOptions,
+): Promise<LocalNetworkSandboxSession>;
+```
+
+The entry point. Pass the result to `agent.createSession({ sandboxSession })`. It resolves `options.workingDirectory` to an absolute path, creates it with `mkdir -p`, and leases one port. It rejects before doing any of that if `abortSignal` is already aborted.
+
+On this path the agent never calls the harness's `onFirstCreate` hook. The harness runs its bootstrap itself.
+
+## `LocalSandboxSessionOptions`
+
+```ts
+type LocalSandboxSessionOptions = {
+	readonly workingDirectory: string;
+	readonly env?: Readonly<Record<string, string>>;
+	readonly abortSignal?: AbortSignal;
+};
+```
+
+| Field | Description |
+| --- | --- |
+| `workingDirectory` | The directory commands run in by default. A relative path resolves against the current process directory. Created if missing. |
+| `env` | Added over `process.env` for every `run` and `spawn`. See [Configuration](/configuration#environment-variables) for precedence. |
+| `abortSignal` | Checked once, before the session is created. It doesn't affect the session afterwards. |
+
+## `LocalNetworkSandboxSession`
+
+```ts
+class LocalNetworkSandboxSession
+	extends LocalSandboxSession
+	implements HarnessV1NetworkSandboxSession
+{
+	readonly id: string;
+	readonly defaultWorkingDirectory: string;
+	readonly ports: ReadonlyArray<number>;
+
+	constructor(options: {
+		defaultWorkingDirectory: string;
+		port: number;
+		env?: Readonly<Record<string, string>>;
+	});
+
+	spawn(options: SpawnOptions): Promise<Experimental_SandboxProcess>;
+	restricted(): Experimental_SandboxSession;
+	getPortUrl: (options: GetPortUrlOptions) => Promise<string>;
+	getPortEndpoint: (
+		options: GetPortEndpointOptions,
+	) => Promise<{ readonly url: string }>;
+	stop: () => Promise<void>;
+	destroy: () => Promise<void>;
+}
+```
+
+Create one with `createLocalSandboxSession`. The constructor takes an already-resolved directory and port, and doesn't lease the port, so nothing stops another session in the process from being handed the same number.
+
+| Member | Description |
+| --- | --- |
+| `id` | A random UUID, new for each session. |
+| `defaultWorkingDirectory` | The resolved `workingDirectory`. |
+| `ports` | Always exactly one port. |
+| `spawn` | As on `LocalSandboxSession`, and the process is tracked so `stop()` can kill it. |
+| `restricted()` | A new `LocalSandboxSession` with the same directory and `env`. Processes it starts are not tracked by `stop()`. |
+| `getPortEndpoint` | Resolves to `{ url }` where `url` is `<protocol>://127.0.0.1:<port>`. `protocol` defaults to `http`. It accepts any port number and doesn't check that it is leased or in use. |
+| `getPortUrl` | The same URL as a string. Deprecated in the harness. |
+| `stop` | Sends `SIGTERM` to tracked processes and releases the port. Idempotent. Doesn't wait for in-flight `run` calls, and never touches the directory. |
+| `destroy` | Calls `stop`. |
+
+`GetPortUrlOptions`, `GetPortEndpointOptions`, and `SpawnOptions` are the parameter types of the matching `HarnessV1NetworkSandboxSession` and `Experimental_SandboxSession` members: `{ port: number; protocol?: 'http' | 'https' | 'ws' }` for the port methods, and the options below for `spawn`.
+
+## `LocalSandboxSession`
+
+```ts
+class LocalSandboxSession implements Experimental_SandboxSession {
+	constructor(
+		cwd: string,
+		sandboxEnv?: Readonly<Record<string, string>>,
+	);
+
+	get description(): string;
+	run(options: RunOptions): Promise<{
+		exitCode: number;
+		stdout: string;
+		stderr: string;
+	}>;
+	spawn(options: SpawnOptions): Promise<Experimental_SandboxProcess>;
+	readFile(options: ReadFileOptions): Promise<ReadableStream<Uint8Array> | null>;
+	readBinaryFile(options: ReadFileOptions): Promise<Uint8Array | null>;
+	readTextFile(options: ReadTextFileOptions): Promise<string | null>;
+	writeFile(options: WriteFileOptions): Promise<void>;
+	writeBinaryFile(options: WriteBinaryFileOptions): Promise<void>;
+	writeTextFile(options: WriteTextFileOptions): Promise<void>;
+}
+```
+
+The sandbox session without the lifecycle and port members, and what `restricted()` returns. `RunOptions` and `SpawnOptions` are both `{ command: string; workingDirectory?: string; env?: Record<string, string>; abortSignal?: AbortSignal }`. The file option types are the matching `Experimental_SandboxSession` parameter types: `path` and `abortSignal` for reads, plus `content` for writes, plus `encoding`, `startLine`, and `endLine` on `readTextFile`.
+
+| Member | Description |
+| --- | --- |
+| `cwd` | The directory commands run in when `workingDirectory` isn't given, and the base for relative file paths. |
+| `description` | Text describing the sandbox, with the working directory, for the agent's instructions. |
+| `run` | Runs `/bin/bash -c <command>` with stdin closed and resolves with the exit code and output. A non-zero exit code resolves. Rejects if the shell can't start (including a missing `workingDirectory`) or the signal aborts. |
+| `spawn` | The same command, returned as a live process handle. `kill()` sends `SIGTERM`. |
+| `readFile`, `readBinaryFile`, `readTextFile` | Resolve to `null` when the file doesn't exist. Other errors reject. |
+| `readTextFile` | `startLine` and `endLine` are 1-based and inclusive. `encoding` defaults to `utf-8`. |
+| `writeFile`, `writeBinaryFile`, `writeTextFile` | Create parent directories and overwrite existing files. |
+
+Exit codes for a process ended by a signal are `128 + signal number`. The environment for `run` and `spawn` is built as described in [Configuration](/configuration#environment-variables). Relative paths resolve against `cwd`; absolute paths and `..` are not restricted.
+
+## `createLocalSandboxProvider`
+
+```ts
+function createLocalSandboxProvider(
+	settings: LocalSandboxProviderSettings,
+): LocalSandboxProvider;
+```
+
+Returns a `LocalSandboxProvider`. For the deprecated `HarnessAgent({ sandbox })` option; see [Getting started](/getting-started#use-the-deprecated-provider-form).
+
+## `LocalSandboxProviderSettings`
+
+```ts
+type LocalSandboxProviderSettings = Omit<
+	LocalSandboxSessionOptions,
+	'abortSignal'
+>;
+```
+
+## `LocalSandboxProvider`
+
+```ts
+class LocalSandboxProvider implements HarnessV1SandboxProvider {
+	readonly specificationVersion: 'harness-sandbox-v1';
+	readonly providerId = 'local-sandbox';
+
+	constructor(settings: LocalSandboxProviderSettings);
+
+	createSession: (
+		options?: CreateSessionOptions,
+	) => Promise<LocalNetworkSandboxSession>;
+}
+```
+
+`CreateSessionOptions` is the parameter of `HarnessV1SandboxProvider['createSession']`: `sessionId`, `abortSignal`, `identity`, and `onFirstCreate`. Only `abortSignal` and `onFirstCreate` are used.
+
+Each `createSession` call goes through `createLocalSandboxSession` with the provider's settings, so every call gets its own session and port in the same directory. When `onFirstCreate` is given, it runs with `restricted()` of the new session. If it throws, the session is stopped and the error propagates.
+
+The provider has no `resumeSession`, so the harness throws `HarnessCapabilityUnsupportedError` when you try to resume through it.
