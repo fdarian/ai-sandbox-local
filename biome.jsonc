@@ -2,6 +2,8 @@
 	"$schema": "https://biomejs.dev/schemas/2.6.2/schema.json",
 	"vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
 	"formatter": { "indentStyle": "tab" },
+	// Biome's Markdown formatter rewrites changeset frontmatter into a heading
+	"markdown": { "formatter": { "enabled": false } },
 	"javascript": { "formatter": { "quoteStyle": "single" } },
 	"linter": {
 		"enabled": true,
