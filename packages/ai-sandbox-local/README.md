@@ -56,7 +56,7 @@ try {
 <details>
 <summary>Environment, PATH and pnpm</summary>
 
-Pass `env` to layer variables over `process.env` for every command the sandbox runs. A per-call `env` still wins.
+Pass `env` to layer variables over `process.env` for every command the sandbox runs. `env.HOME` beats `homeDirectory`, and a per-call `env` beats both.
 
 ```ts
 createLocalSandboxSession({
@@ -74,7 +74,17 @@ Commands also run with pnpm's `dangerouslyAllowAllBuilds` enabled, so a harness'
 <details>
 <summary>Where harness state goes</summary>
 
-Harness bootstrap state (pinned CLI installs, bridge state, skills) lives in `$HOME/.ai-sdk-harness`, not in your repo. `HOME` is read from the sandbox's environment, so `env: { HOME: '/path/to/state' }` relocates it, for example to persistent storage.
+Harness bootstrap state (pinned CLI installs, bridge state, skills) lives in `$HOME/.ai-sdk-harness` of the sandbox, not in your repo. The sandbox's `HOME` defaults to `ai-sandbox-local/home` under `os.tmpdir()`, shared by every session so the roughly 20-second first-run CLI install stays warm. The OS may clear its temp dir, which only means a slow first run again.
+
+Pass `homeDirectory` to choose another one:
+
+```ts
+import { homedir } from 'node:os';
+
+createLocalSandboxSession({ workingDirectory, homeDirectory: homedir() });
+```
+
+Trade-off: everything the agent runs sees that `HOME`, so under the default it does not find your `~/.gitconfig` (git identity), `~/.ssh` keys, or npm/CLI logins. Use `homeDirectory: homedir()` to get them back, or pass specific variables through `env`, such as `GIT_AUTHOR_NAME` or `GIT_CONFIG_GLOBAL`.
 
 </details>
 

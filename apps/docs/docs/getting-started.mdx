@@ -58,7 +58,7 @@ Run it with your TypeScript runner and `ANTHROPIC_API_KEY` set. Here is what eac
 - `session.destroy()` ends the harness session. Because you passed the sandbox in, you also end it yourself with `sandboxSession.destroy()`, which kills any process still running in it, including the harness's bridge. Neither deletes your directory.
 
 :::note[The first run is slow]
-The first `createSession` installs the pinned Claude Code CLI under `$HOME/.ai-sdk-harness`, which took about 20 seconds when measured. Later runs find it already installed and take under a second. If you put a UI on top, say why the first start is slow instead of showing a bare spinner.
+The first `createSession` installs the pinned Claude Code CLI under the sandbox's `$HOME/.ai-sdk-harness` (a directory under the OS temp dir by default), which took about 20 seconds when measured. Later runs find it already installed and take under a second. If you put a UI on top, say why the first start is slow instead of showing a bare spinner.
 :::
 
 ## Stream the response

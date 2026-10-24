@@ -22,13 +22,14 @@ What the agent sees is set on the `HarnessAgent`, with `sandboxConfig.workDir`, 
 The omitted case is the default, and the trap: the agent starts without error and finds an empty directory. Always pass `workDir: '.'` when the agent should see your files.
 
 `workDir` must be relative and stay inside `workingDirectory`: `HarnessAgent` throws on an absolute path or one that starts with `..`.
+
 ## Where harness state goes
 
-The harness keeps its own files outside the directory the agent works in, under `$HOME/.ai-sdk-harness` of the sandbox:
+The harness keeps its own files outside the directory the agent works in, under `$HOME/.ai-sdk-harness` of the sandbox. By default the sandbox's `$HOME` is not your real home: it is `ai-sandbox-local/home` under the OS temp directory (`os.tmpdir()`), created if missing.
 
 <FileTree>
 
-- ~/
+- /tmp/ai-sandbox-local/home/ (the sandbox's `$HOME`)
   - .ai-sdk-harness/
     - .harness-bootstrap/
       - claude-code/
@@ -37,19 +38,34 @@ The harness keeps its own files outside the directory the agent works in, under 
 
 </FileTree>
 
-`.harness-bootstrap/claude-code` holds the pinned CLI install and its bridge, and `.agent-runs` holds per-session bridge state. Your repo stays clean, and the CLI install, which runs `pnpm install`, never runs inside your own pnpm workspace.
+`.harness-bootstrap/claude-code` holds the pinned CLI install and its bridge, and `.agent-runs` holds per-session bridge state. Your real home and your repo stay clean, and the CLI install, which runs `pnpm install`, never runs inside your own pnpm workspace.
 
-The harness finds `$HOME` by running `printf "$HOME"` inside the sandbox. In a local sandbox that is your real home directory unless you override it.
+The directory is shared by every session and working directory on purpose, so the roughly 20-second first-run CLI install happens once. The OS may clear its temp directory (macOS does after a few days, and Linux often on reboot). That only means a slow first run again.
 
-## Move it with `env.HOME`
+The harness finds `$HOME` by running `printf "$HOME"` inside the sandbox, so the `HOME` the sandbox gives its processes is what decides all of this.
 
-Set `HOME` in the sandbox's `env` to put the harness state somewhere else, such as persistent storage you control:
+## Choose it with `homeDirectory`
+
+Pass `homeDirectory` to put the state somewhere else, such as persistent storage you control, or your real home:
 
 ```ts
+import { homedir } from 'node:os';
+
 const sandboxSession = await createLocalSandboxSession({
 	workingDirectory: '/path/to/your/repo',
-	env: { HOME: '/path/to/state' },
+	homeDirectory: '/path/to/state', // or homedir() to use your real home
 });
 ```
 
-The new `$HOME` takes everything that lives under a home directory with it. Claude Code writes its own `~/.claude` and `~/.claude.json` there too, so a relocated session doesn't see your user-level Claude settings. Credentials passed through environment variables, such as `ANTHROPIC_API_KEY`, keep working. See [Configuration](/configuration) for how `env` combines with the host environment.
+`homeDirectory` is resolved to an absolute path and created with `mkdir -p`. `env.HOME` also works and wins over `homeDirectory`; see [Configuration](/configuration#environment-variables) for the full precedence.
+
+## What a different `$HOME` hides
+
+Everything the agent runs sees this `$HOME`, not only the harness. Anything that reads config from `HOME` will not find your dotfiles under the default:
+
+- Git identity and settings in `~/.gitconfig`, so commits fail or use a wrong author.
+- SSH keys and `known_hosts` in `~/.ssh`.
+- npm, `gh`, cloud CLI and other tool logins stored under `~`.
+- Claude Code's own `~/.claude` and `~/.claude.json`, so the session doesn't see your user-level Claude settings.
+
+Credentials passed through environment variables, such as `ANTHROPIC_API_KEY`, keep working. To get your dotfiles back, pass `homeDirectory: homedir()`, which puts the harness state in your real home. To keep the default and expose only what you need, pass specific variables through `env`, for example `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, or `GIT_CONFIG_GLOBAL` pointing at your `~/.gitconfig`.

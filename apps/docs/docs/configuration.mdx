@@ -5,11 +5,11 @@ sidebar:
   order: 4
 ---
 
-The sandbox has one setting beyond the directory: `env`. This page covers what it does and the two situations where you will reach for it.
+The sandbox has two settings beyond the directory: `env` and `homeDirectory`. This page covers `env` and the two situations where you will reach for it. `homeDirectory` is in [Working directory and $HOME](/working-directory#choose-it-with-homedirectory).
 
 ## Environment variables
 
-Commands the sandbox runs get your process environment plus whatever you pass as `env`:
+Commands the sandbox runs get your process environment, a `HOME` of the sandbox's own, plus whatever you pass as `env`:
 
 ```ts
 const sandboxSession = await createLocalSandboxSession({
@@ -22,8 +22,9 @@ const sandboxSession = await createLocalSandboxSession({
 
 1. The pnpm build-approval defaults, described [below](#pnpm-build-approval).
 2. `process.env`.
-3. The `env` option.
-4. The `env` of a single `run` or `spawn` call, which is how the harness passes its per-process values.
+3. `HOME`, set to `homeDirectory`. By default this is a directory under the OS temp dir, not your real home; see [Working directory and $HOME](/working-directory#where-harness-state-goes).
+4. The `env` option, so `env.HOME` beats `homeDirectory`.
+5. The `env` of a single `run` or `spawn` call, which is how the harness passes its per-process values.
 
 The same `env` applies to every command, including the ones the harness runs to install and start its bridge, and to a [`restricted()`](/sessions-and-processes#restricted-view) view of the session.
 
