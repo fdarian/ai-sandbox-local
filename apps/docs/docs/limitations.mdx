@@ -27,6 +27,10 @@ Commands run through `/bin/bash`, so macOS and Linux are supported and Windows i
 
 Ports are leased from a registry inside your process. Two separate Node processes can be handed the same port, and a program outside the registry can take a port between the lease and the moment the bridge binds it.
 
+## Adapter coverage
+
+Claude Code, Codex (`gpt-6-luna`), and pi (`xai/grok-4.3`) were run end to end against this sandbox. For OpenCode, the bootstrap and session creation were verified, but a full turn was not, because no xAI credentials were available.
+
 ## Shutdown is partial
 
-`stop()` and `destroy()` send `SIGTERM` and return without waiting for the processes to exit, don't touch processes started after they are called, and never delete the directory. Details are in [Sessions and processes](/sessions-and-processes#stop-and-destroy).
+`stop()` and `destroy()` send `SIGTERM` to each process and its descendants, then return without waiting for the processes to exit, don't touch processes started after they are called, and never delete the directory. Details are in [Sessions and processes](/sessions-and-processes#stop-and-destroy).
