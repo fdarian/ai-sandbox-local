@@ -1,9 +1,10 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, spyOn, test } from 'bun:test';
 import { stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createLocalSandboxSession } from '#src/create-local-sandbox-session.ts';
 import type { LocalNetworkSandboxSession } from '#src/local-network-sandbox-session.ts';
+import * as portModule from '#src/port.ts';
 import {
 	cleanupTempDir,
 	makeTempDir,
@@ -266,4 +267,26 @@ describe('createLocalSandboxSession', () => {
 			}
 		});
 	}
+
+	test('stop() still releases the port, and rejects, when ps fails', async () => {
+		const workingDirectory = await makeTempDir();
+		const originalPath = process.env.PATH;
+		const releasePort = spyOn(portModule, 'releasePort');
+		try {
+			const session = await createLocalSandboxSession({ workingDirectory });
+			const proc = await session.spawn({ command: 'sleep 30' });
+
+			process.env.PATH = workingDirectory;
+			await expect(session.stop()).rejects.toThrow();
+			process.env.PATH = originalPath;
+
+			expect(releasePort).toHaveBeenCalledWith(session.ports[0] as number);
+			await proc.kill();
+			await proc.wait();
+		} finally {
+			process.env.PATH = originalPath;
+			releasePort.mockRestore();
+			await cleanupTempDir(workingDirectory);
+		}
+	});
 });

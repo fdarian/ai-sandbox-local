@@ -77,8 +77,11 @@ export class LocalNetworkSandboxSession
 	stop = async (): Promise<void> => {
 		if (this.stopped) return;
 		this.stopped = true;
-		this.processes.killAll();
-		releasePort(this.leasedPort);
+		try {
+			this.processes.killAll();
+		} finally {
+			releasePort(this.leasedPort);
+		}
 	};
 
 	/**
