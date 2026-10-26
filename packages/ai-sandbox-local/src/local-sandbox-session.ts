@@ -7,6 +7,7 @@ import {
 	extractLines,
 } from '@ai-sdk/provider-utils';
 import { isEnoent } from '#src/is-enoent.ts';
+import { SESSION_ID_ENV } from '#src/kill-process-tree.ts';
 import { ProcessRegistry } from '#src/process-registry.ts';
 import { toSandboxProcess } from '#src/sandbox-process.ts';
 import { bytesToStream, collectStream } from '#src/stream-utils.ts';
@@ -130,7 +131,11 @@ export class LocalSandboxSession implements Experimental_SandboxSession {
 	private startShell(options: RunOptions | SpawnOptions): ChildProcess {
 		const child = spawn('/bin/bash', ['-c', options.command], {
 			cwd: options.workingDirectory ?? this.cwd,
-			env: spawnEnv(this.sandboxEnv, options.env),
+			env: {
+				...spawnEnv(this.sandboxEnv, options.env),
+				// Last, so a caller's env can't hide the process from `stop()`.
+				[SESSION_ID_ENV]: this.processes.sessionId,
+			},
 			stdio: ['ignore', 'pipe', 'pipe'],
 		});
 		this.processes.track(child);

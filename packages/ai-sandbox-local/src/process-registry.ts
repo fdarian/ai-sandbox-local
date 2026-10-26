@@ -1,5 +1,6 @@
 import type { ChildProcess } from 'node:child_process';
-import { killProcessTrees } from '#src/kill-process-tree.ts';
+import { randomUUID } from 'node:crypto';
+import { killSessionProcesses } from '#src/kill-process-tree.ts';
 
 /**
  * Shared by a `LocalNetworkSandboxSession` and every `restricted()` view
@@ -8,6 +9,8 @@ import { killProcessTrees } from '#src/kill-process-tree.ts';
  * session itself. Internal; not exported from the package entry.
  */
 export class ProcessRegistry {
+	/** Value of `SESSION_ID_ENV` on every process started through this registry. */
+	readonly sessionId = randomUUID();
 	private readonly children = new Set<ChildProcess>();
 
 	track(child: ChildProcess): void {
@@ -18,6 +21,6 @@ export class ProcessRegistry {
 	}
 
 	killAll(): void {
-		killProcessTrees(this.children);
+		killSessionProcesses(this.children, this.sessionId);
 	}
 }
