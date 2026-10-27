@@ -2,7 +2,8 @@
 	"extends": "@total-typescript/tsconfig/bundler/no-dom/app",
 	"compilerOptions": {
 		"noErrorTruncation": true,
+		"allowImportingTsExtensions": true,
 		"types": ["node"]
 	},
-	"include": ["blume.config.ts"]
+	"include": ["blume.config.ts", "components.ts"]
 }

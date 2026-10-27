@@ -5,7 +5,7 @@ pnpm + Bun + Turborepo monorepo for `ai-sandbox-local`, an AI SDK harness sandbo
 ## Workspaces
 
 - `packages/ai-sandbox-local` — the published npm library. See its [AGENTS.md](./packages/ai-sandbox-local/AGENTS.md) for design decisions and gotchas.
-- `apps/docs` — private [Blume](https://www.npmjs.com/package/blume) docs site (markdown-first, Astro-based). Pages are `.mdx` files in `apps/docs/docs/`, routed from the content root, so `docs/getting-started.mdx` is `/getting-started`; order comes from each page's `sidebar.order` frontmatter. Code samples in the pages are checked by hand against `@ai-sdk/harness` and the harness adapters, not compiled by CI, so re-check them when the library's API changes.
+- `apps/docs` — private [Blume](https://www.npmjs.com/package/blume) docs site (markdown-first, Astro-based). Pages are `.mdx` files in `apps/docs/docs/`, routed from the content root, so `docs/getting-started.mdx` is `/getting-started`; order comes from each page's `sidebar.order` frontmatter. The look comes from the shared `@fdarian/blume-preset` (installed from a git tag): `blume.config.ts` wraps its config in `withPreset`, and `theme.css` / `components.ts` are wiring only. Code samples in the pages are checked by hand against `@ai-sdk/harness` and the harness adapters, not compiled by CI, so re-check them when the library's API changes.
 
 ## Stack
 
